@@ -73,3 +73,75 @@ Everything before 2026-10-24 has no clock on it -- the log starts with the fade.
                   demo_cuts and demo_fade are byte-identical again. demo_title
                   was rebuilt twice and is byte-identical to itself.
 ```
+
+## 2026-10-24, afternoon: the titles the GUI could not see
+
+```
+14:02  tags      v0.1-cuts on de91e19, v0.2-fade on 72ee8f3, v0.3-titles on
+                  ef24bf1, annotated, pushed; ls-remote shows all three.
+
+14:10  report    from the GUI: with V1 hidden the title shows over black, with V1
+                  visible it is covered. So in Shotcut's preview the text is
+                  *below* V1, while melt draws it on top of V1 -- same file.
+
+14:20  evidence  Shotcut also wrote over demo_title.mlt itself (13:59), and
+                  demo_title_saved.mlt is a second save (14:07). Both are
+                  Shotcut's rewrite: every a_track 0, the title blend included.
+                  Held as PROVENANCE 22,464 / b5917c63....
+
+~14:25 probes    rendering those rewrites settles which side is right. Frame 61,
+                  band PSNR against the same file with the text filters removed:
+                    ours (a_track 1)        20.0 dB  text drawn
+                    Shotcut's save (a=0)    inf      no text at all
+                    a=1 on Shotcut's save   20.0 dB  text drawn
+                    a=0 + V1 hidden         inf      still no text
+                    swapped track order     inf
+                    qtblend a=0 / a=1       inf / 11.9 dB
+                    composite a=0 / a=1     inf / 11.9 dB
+                  So it is not the service and not the track order: MLT 7.41
+                  composites into the a-frame, a=0 means the background frame,
+                  and the background is painted before V1. Shotcut's own save
+                  therefore contains no title -- its preview was telling the
+                  truth about the file it had written.
+
+14:35  decision  a title that rides a transition rides a number the editor owns.
+                  Titles became dynamictext filters with in/out windows *inside
+                  the V1 playlist*: a track filter, which Shotcut round-trips as
+                  it finds it (it kept playlist0's audiolevel filter untouched).
+                  V2 and its blends are gone; the file is 127 elements, 3 tracks.
+                  Probe before writing it: window on at frames 61 and 224 (11.9
+                  and 14.3 dB), off at 120 (inf).
+
+14:40  check 7   `shotcut`: refuses any enabled blend whose b-track carries text,
+                  then applies Shotcut's rewrite (a_track -> 0) and renders both
+                  sides of it, asking the titles question again. Validated both
+                  ways: on the old file with the guard bypassed it reports
+                  "title 1 is gone after the rewrite ... frame 61 reads inf dB";
+                  on the new file, "the rewrite changes no blend".
+
+14:45  melt      the build then hung: 311 frames and 10.377 s written, process
+                  alive minutes later with CPU frozen, both under the task
+                  scheduler and once from a shell. Cause: eof=pause on every
+                  producer plus a last entry that ends exactly on the last frame
+                  -- V2's trailing blank used to supply the pull past the end.
+                  Consumer now gets terminate_on_pause=1, and _melt_render trusts
+                  only the file: a pass that has stopped writing, whose output
+                  already holds the length asked for, is finished.
+
+14:52  build     demo_title: all seven checks pass. Band 23.3 / 20.0 / 20.6 dB
+                  against 29.5 / 26.2 / 26.8 whole-frame (title 1), 23.8 / 26.3 /
+                  21.3 against 29.9 / 32.4 / 27.5 (title 2), frames 25/96/190/258
+                  identical, shotcut "the rewrite changes no blend". Project
+                  7,101 bytes / 28336a58....
+
+14:55  hashes    demo_cuts and demo_fade rebuilt at this commit: 4234355f... and
+                  ad9335d1..., byte-identical to PROVENANCE. Their checks.json and
+                  digest.txt churn was only timestamps and render wall-clock, so
+                  those four files were reverted rather than committed.
+
+14:58  docs      README (seven checks, Titles section rewritten around the GUI
+                  evidence, the track-filter mechanism, the fourth melt
+                  behaviour), REPORT (demo_title section, check table with
+                  shotcut), PROVENANCE (new hash, the Shotcut-saved copy and what
+                  it proves), this log.
+```

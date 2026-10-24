@@ -2,7 +2,7 @@ cutwright 0.1.0  build record
 plan           projects\demo_title\plan.json
 plan sha256    bf9621a9a611c332d8883866aff368bd948beb869a060fac63fe6981716a6a06
 project        projects\demo_title\demo_title.mlt
-project sha256 fbc6a197467e899c7444dfbf1434a8777f17aa83797a37a9ff8c4bf739434da5
+project sha256 28336a58acd6b59b2ed2ec91b779010ce4ce0bfdaacfebc2e0cdaeec00730368
 shotcut        26.9.27   (shotcut.exe product version)
 mlt            7.41.0   (melt.exe --version)
 profile        1080x1920, 30000/1001 fps, colorspace 709
@@ -19,9 +19,10 @@ titles
   1  title2      'the word is meat'            frames 192-257  66 f  lower, 48 px, 0xffffffff
 
 checks
-  [+] xml      163 element(s), 22 id(s), 14 reference(s) resolve, records Shotcut 26.9.27 / MLT 7.41.0
+  [+] xml      127 element(s), 17 id(s), 11 reference(s) resolve, records Shotcut 26.9.27 / MLT 7.41.0
   [+] effects  7 name(s) -- avformat, brightness, color, dynamictext, frei0r.cairoblend, mix, volume -- all in melt's own lists (674 filters / 59 transitions / 42 producers)
-  [+] lengths  311 frames (10.377 s) = 120 + 102 + 89; A1 311, Background 311, V1 311, V2 311
-  [+] render   311/311 frames, 10.377 s of audio, 26.0 dB, 34.4 dB, 31.6 dB, control 13.4 dB, audio -23.9 dB vs source -23.5 dB, 35.3 s to render at 270x480
+  [+] lengths  311 frames (10.377 s) = 120 + 102 + 89; A1 311, Background 311, V1 311
+  [+] render   311/311 frames, 10.377 s of audio, 26.0 dB, 34.4 dB, 31.6 dB, control 13.4 dB, audio -23.9 dB vs source -23.5 dB, 25.9 s to render at 270x480
   [+] fade     level first frame 0.00, half way into the fade in 0.28, first frame after the fade in 0.99, last frame before the fade out 1.00, half way into the fade out 0.45, last frame 0.00, frame 25, inside the edit 0.99, frame 155, inside the edit 1.00, frame 279, inside the edit 1.00, sound -76.0 dB at the head against -23.5 dB in the middle
   [+] titles   title 1 frames 27-95: first frame band 23.3 / frame 29.5 dB, middle frame band 20.0 / frame 26.2 dB, last frame band 20.6 / frame 26.8 dB; title 2 frames 192-257: first frame band 23.8 / frame 29.9 dB, middle frame band 26.3 / frame 32.4 dB, last frame band 21.3 / frame 27.5 dB, clear outside the window at frame(s) 25 (inf dB), 96 (inf dB), 190 (inf dB), 258 (inf dB)
+  [+] shotcut  the rewrite changes no blend (none carries the picture); title 1 frame 61: band 20.0 / frame 26.2 dB, title 2 frame 224: band 26.3 / frame 32.4 dB

@@ -118,13 +118,20 @@ later.
 |---|---|---|---|
 | `projects\demo_cuts\demo_cuts.mlt` | 4,724 | `4234355fdfdb4a6f6f788eec5efb0c502caa9eaec845f89a713039e5b24fe49e` | 3 clips from `testclips\part1_1_60-120.mp4`, 311 frames, Shotcut 26.9.27 / MLT 7.41.0 recorded inside. Two independent builds of the same plan are byte-identical, so the hash is a real fingerprint of the edit |
 | `projects\demo_fade\demo_fade.mlt` | 5,636 | `ad9335d181d258b18a2bc604d3b947b66ab3c0df1f9f8ce85e034d1e4af00297` | the same three cuts under a 0.8 s fade in and a 1.0 s fade out (24 and 30 frames at the timeline's own 29.97 fps), picture and sound. Two animated filters on the tractor, nothing else changed |
-| `projects\demo_title\demo_title.mlt` | 8,803 | `fbc6a197467e899c7444dfbf1434a8777f17aa83797a37a9ff8c4bf739434da5` | the same three cuts and the same fade, plus a V2 track carrying two `dynamictext` titles over transparent `color` producers (frames 27-95 and 192-257). Its own `sha256` is in `digest.txt`; the edit and the numbers it was checked against are in `checks.json` |
+| `projects\demo_title\demo_title.mlt` | 7,101 | `28336a58acd6b59b2ed2ec91b779010ce4ce0bfdaacfebc2e0cdaeec00730368` | the same three cuts and the same fade, plus two `dynamictext` **track filters on V1** with `in`/`out` windows at frames 27-95 and 192-257. Three tracks, no title track, and no blend that anything on screen depends on. Its own `sha256` is in `digest.txt`; the edit and the numbers it was checked against are in `checks.json` |
+| `projects\demo_title\demo_title_saved.mlt` | 22,464 | `b5917c63e66f282cd1fa2e92deec3d57b4692bf9472a5d8d67aaec5e98273b5d` | **not written by this tool.** Shotcut 26.9.27's own save of the previous `demo_title.mlt` (the V2 version, 8,803 bytes above), kept as the evidence for why the titles moved to a track filter: Shotcut rewrote the title blend from `a_track=1` to `a_track=0` and changed nothing else about it. Every `a_track` in this file is 0, including the one on the track that carries the text |
 
-The titles commit **did not** move the two hashes above. It did rewrite the
-`a_track` of the V2 blend -- that is the bug it fixes -- but the two older plans
-have no V2, and the audio `mix` transitions keep `a_track=0`, which is what
-Shotcut writes and where the summed audio belongs. Both were rebuilt at this
+The titles-as-track-filters commit **did not** move the two hashes above it. It
+did take the V2 track away, and with it the title blend, but the two older plans
+never had a V2, and the audio `mix` transitions still keep `a_track=0`, which is
+what Shotcut writes and where summed audio belongs. Both were rebuilt at this
 commit and came out byte-identical.
+
+The commit before it (titles on V2) also left them alone -- it changed the
+`a_track` of the V2 blend, which those plans do not have -- but its own
+`demo_title` hash is superseded: `8,803` bytes, `fbc6a197467e899c7444dfbf1434a8777f17aa83797a37a9ff8c4bf739434da5`.
+That file is the one that failed in the GUI, and `demo_title_saved.mlt` is what
+Shotcut made of it.
 
 The fade commit did **not** move `demo_cuts`' hash: the profile fix it carries
 changed how renders are invoked (`-profile`), not what the writer emits. The

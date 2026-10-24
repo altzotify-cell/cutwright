@@ -26,6 +26,8 @@ not the same as a .mlt that edits correctly:
   6. titles   the text is on screen, inside the band the plan named, on the
               frames it was given and no others, against the same timeline
               with the titles taken out
+  7. shotcut  the same titles survive the multitrack rewrite Shotcut performs
+              on load -- the rewrite that removed them once already
 
 Frame counts are integers everywhere; no timecode strings, no floats in the
 XML. "00:00:09.500" is a rounding argument waiting to happen, and the length
@@ -36,6 +38,7 @@ import fractions
 import os
 import re
 import subprocess
+import tempfile
 import time
 import xml.etree.ElementTree as ET
 
@@ -303,15 +306,29 @@ FADE_FLOOR_DB = -60.0      # where a fade begins and ends in sound. `volume.leve
                            # as far as any measurement here can tell.
 
 # --- titles -----------------------------------------------------------------
-# A title is a transparent colour producer on V2 with one `dynamictext` filter
-# on it, which is how Shotcut writes "Text: Simple": the filter draws into that
-# producer's frame and the track is composited over everything below it with
-# alpha, so the picture under the text is still there and still editable. The
-# bands are percentages of the frame, in melt's `x/y:w x h:opacity` rect form.
+# A title is one `dynamictext` filter with an in/out window, written *inside
+# the V1 playlist* rather than on a track of its own. That is the same element
+# Shotcut writes for a track filter -- it round-trips them untouched, filter
+# elements and all -- and it means the text is drawn onto the picture by the
+# track that owns the picture rather than by a transition between tracks.
+#
+# The V2 route was tried first and abandoned on evidence. A text clip on V2
+# needs a blend to land on the picture, and which blend lands depends on
+# `a_track`: a=1 (the track below) draws the title over V1 in melt, a=0 (the
+# background) draws nothing at all, because MLT 7.41 composites into the a-frame
+# and the background is painted before V1. Shotcut, on load, rebuilt that blend
+# with a_track=0 -- its saved copy of the same timeline has it in black and
+# white -- so the same file showed the title in melt and lost it in the GUI, and
+# the GUI was right about the file it had been handed: with a=0 there is no
+# title. Nothing in the file can stop an editor from rewriting a transition it
+# thinks it owns. A filter on the track is not a transition, so there is nothing
+# to rewrite, and the check named `shotcut` keeps it that way.
+#
+# The bands are percentages of the frame, in melt's `x/y:w x h:opacity` form.
 TITLE_BANDS = {"top": ("0%", "8%", "100%", "24%"),
                "middle": ("0%", "38%", "100%", "24%"),
                "lower": ("0%", "68%", "100%", "24%")}
-TITLE_TRACK = "V2"         # the track titles live on, above V1 and below A1
+TITLE_TRACK = "V1"         # the track the titles are drawn on
 TITLE_SIZE = 64            # pixels of font height in the project's own resolution
 TITLE_FG = "0xffffffff"    # white text ...
 TITLE_OUTLINE = "0x000000ff"   # ... with a black outline, so it reads on any shot
@@ -346,13 +363,13 @@ class Project(object):
         self._lengths = {}
         self.fade = {"in": 0, "out": 0, "audio": True}
         self.titles = []
-        # Leave the text off a title, keeping everything else about it -- the
-        # transparent producer, its frames on V2, the blend. The titles check
-        # renders its control this way: two files that differ by one filter
-        # element, not by a track or a compositing path. Both of those change
-        # the picture everywhere (cairo shifts colour, and melt skips a blend
-        # whose b-frame never arrives), which drowns the frames that are
-        # supposed to be silent.
+        # Leave the text off a title, keeping everything else about it: what the
+        # toggle drops is exactly the two `dynamictext` filters, so the control
+        # render is this same file minus the words and nothing else. The titles
+        # check renders its control this way -- two files that differ by two
+        # filter elements, not by a track or a compositing path, either of which
+        # moves the picture everywhere and drowns the frames that are supposed
+        # to be silent.
         self.no_title_text = False
 
     # -- building ---------------------------------------------------------
@@ -407,10 +424,10 @@ class Project(object):
                           colour=None):
         """The frame half of add_title, so a control can reuse exact frames.
 
-        Frames, as everywhere else. Two titles may not overlap: they share V2,
-        and a playlist entry cannot start before the one in front of it ends,
-        so asking for that is refused here rather than written and silently
-        dropped by the compositor.
+        Frames, as everywhere else. Two titles may not overlap: they are two
+        filters on the same track, and melt would draw both at once, so asking
+        for that is refused here rather than written and left for whoever
+        watches the render to notice.
         """
         text = (str(text) if text is not None else "").strip()
         if not text:
@@ -431,7 +448,7 @@ class Project(object):
             if start <= other["at"] + other["frames"] - 1 and other["at"] <= end:
                 raise PlanError("title %r overlaps title %r on %s"
                                 % (text[:24], other["text"][:24], TITLE_TRACK))
-        title = {"producer": "title%d" % (len(self.titles) + 1),
+        title = {"label": "title%d" % (len(self.titles) + 1),
                  "text": text, "in": start, "out": end,
                  "frames": end - start + 1, "at": start,
                  "size": int(size or TITLE_SIZE), "position": position,
@@ -569,27 +586,33 @@ class Project(object):
                        ("cutwright:source",
                         guard.rel(clip["source"]).replace("\\", "/"))])
 
-        for index, title in enumerate(self.titles):
-            # Transparent producer + one text filter, the shape Shotcut writes
-            # for "Text: Simple". `resource=0x00000000` with an rgba image
-            # format is a frame of nothing, which is what makes the blend below
-            # put the text over the picture instead of over a black box.
-            span = str(title["frames"] - 1)
-            p = ET.SubElement(root, "producer", {"id": title["producer"],
-                                                 "in": "0", "out": span})
-            _props(p, [("length", title["frames"]),
-                       ("eof", "pause"),
-                       ("resource", "0x00000000"),
-                       ("aspect_ratio", "1"),
-                       ("mlt_service", "color"),
-                       ("mlt_image_format", "rgba"),
-                       ("shotcut:caption", title["text"][:60])])
-            # The control render is this same producer with this one element
-            # left out, so the two files composite identically and the only
-            # thing between them is the text.
-            if not self.no_title_text:
-                f = ET.SubElement(p, "filter", {"id": "titlefilter%d" % index,
-                                                "in": "0", "out": span})
+        bglist = ET.SubElement(root, "playlist", {"id": "playlist0"})
+        _props(bglist, [("shotcut:name", "Background")])
+        ET.SubElement(bglist, "entry", {"producer": "producer0", "in": "0",
+                                        "out": last})
+
+        v1 = ET.SubElement(root, "playlist", {"id": "playlist1"})
+        _props(v1, [("shotcut:video", "1"), ("shotcut:name", "V1")])
+        a1 = ET.SubElement(root, "playlist", {"id": "playlist2"})
+        _props(a1, [("shotcut:audio", "1"), ("shotcut:name", "A1")])
+        for clip in self.clips:
+            for playlist in (v1, a1):
+                ET.SubElement(playlist, "entry",
+                              {"producer": clip["producer"],
+                               "in": str(clip["in"]), "out": str(clip["out"])})
+
+        # The titles, as windows on the picture track. A filter on a playlist is
+        # a track filter in Shotcut: it shows in the Filters panel with the
+        # track selected, it renders in the preview and in an export, and it is
+        # written back as it was found. The control render is this same file
+        # with these elements left out -- no other difference at all -- so the
+        # comparison in check_titles measures the text and nothing else.
+        if not self.no_title_text:
+            for index, title in enumerate(self.titles):
+                f = ET.SubElement(v1, "filter",
+                                  {"id": "titlefilter%d" % index,
+                                   "in": str(title["at"]),
+                                   "out": str(title["at"] + title["frames"] - 1)})
                 _props(f, [("argument", title["text"]),
                            ("geometry", title["geometry"]),
                            ("family", "Sans"), ("size", title["size"]),
@@ -600,39 +623,6 @@ class Project(object):
                            ("halign", "center"), ("valign", "middle"),
                            ("mlt_service", "dynamictext"),
                            ("shotcut:filter", "dynamicText")])
-
-        bglist = ET.SubElement(root, "playlist", {"id": "playlist0"})
-        _props(bglist, [("shotcut:name", "Background")])
-        ET.SubElement(bglist, "entry", {"producer": "producer0", "in": "0",
-                                        "out": last})
-
-        v1 = ET.SubElement(root, "playlist", {"id": "playlist1"})
-        _props(v1, [("shotcut:video", "1"), ("shotcut:name", "V1")])
-        v2 = None
-        if self.titles:
-            v2 = ET.SubElement(root, "playlist", {"id": "playlist2"})
-            _props(v2, [("shotcut:video", "2"), ("shotcut:name", TITLE_TRACK)])
-            # A title sits at a frame, so the track needs blanks for the gaps.
-            # Without them every later title would slide to the front.
-            cursor = 0
-            for title in self.titles:
-                if title["at"] > cursor:
-                    ET.SubElement(v2, "blank",
-                                  {"length": str(title["at"] - cursor)})
-                ET.SubElement(v2, "entry",
-                              {"producer": title["producer"], "in": "0",
-                               "out": str(title["frames"] - 1)})
-                cursor = title["at"] + title["frames"]
-            if cursor < length:
-                ET.SubElement(v2, "blank", {"length": str(length - cursor)})
-        a1 = ET.SubElement(root, "playlist",
-                           {"id": "playlist2" if v2 is None else "playlist3"})
-        _props(a1, [("shotcut:audio", "1"), ("shotcut:name", "A1")])
-        for clip in self.clips:
-            for playlist in (v1, a1):
-                ET.SubElement(playlist, "entry",
-                              {"producer": clip["producer"],
-                               "in": str(clip["in"]), "out": str(clip["out"])})
 
         tractor = ET.SubElement(root, "tractor", {"id": "tractor0",
                                                   "in": "0", "out": last})
@@ -646,11 +636,7 @@ class Project(object):
                                          "hide": "audio"})
         ET.SubElement(tractor, "track", {"producer": "playlist1",
                                          "hide": "audio"})
-        if v2 is not None:
-            ET.SubElement(tractor, "track", {"producer": "playlist2",
-                                             "hide": "audio"})
-        ET.SubElement(tractor, "track", {"producer": "playlist3" if v2 is not None
-                                                    else "playlist2",
+        ET.SubElement(tractor, "track", {"producer": "playlist2",
                                          "hide": "video"})
 
         made = [0]
@@ -671,31 +657,23 @@ class Project(object):
         # visible gain -- measured here at 6.9 s vs 4.5 s for 60 frames, and
         # the two differ by 33 dB, i.e. cairo shifts the colour slightly.
         #
-        # V2 is the opposite case: its whole job is alpha, so its blend has to
-        # run. Without it the transparent producer wins the frame and the
-        # picture goes black wherever there is no text.
+        # That is the whole video side of this file: one track of picture, and
+        # no transition that anything on screen depends on. Titles are filters
+        # on V1 (see TITLE_BANDS above), so there is no a_track here for an
+        # editor to rewrite, which is the one thing the old V2 blend could not
+        # survive -- Shotcut rebuilt it with a_track=0 and, in MLT 7.41, a
+        # composite into the background frame lands under the picture and
+        # disappears.
         #
-        # The a-frame has to be the track *immediately below*, not the
-        # background. Shotcut writes a_track=0 everywhere, but MLT 7.41 as
-        # built here composites that onto the background frame instead of onto
-        # the running picture: a three-track probe (black / green / red) with
-        # composite a=0 b=2 changed nothing at all, while a=1 b=2 put red over
-        # green in the requested half of the frame. Same file, same transition,
-        # only a_track differs. With a_track=1 the demo's titles appear (centre
-        # band YMAX 195 -> 250) and the frames that carry no title stay
-        # identical to the control render, so blanks in the title track are
-        # harmless.
         # `mix` sums each track's audio into the background frame, and that is
         # where Shotcut puts it: a_track=0 on every one of these. Audio and
         # picture blend differently -- a video blend wants the running picture
         # as its a-frame, an audio mix wants the accumulating sum -- so these
-        # stay at the background and the default below is for the blends.
+        # stay at the background and the default above is for blends, of which
+        # this writer now emits none.
         transition("mix", 1, a_track=0, sum="1")
         transition("frei0r.cairoblend", 1, disable="1")
-        if v2 is not None:
-            transition("mix", 2, a_track=0, sum="1")
-            transition("frei0r.cairoblend", 2)
-        transition("mix", 3 if v2 is not None else 2, a_track=0, sum="1")
+        transition("mix", 2, a_track=0, sum="1")
 
         for index, (attrs, pairs) in enumerate(self._fade_filters()):
             filter_el = ET.SubElement(tractor, "filter",
@@ -891,9 +869,10 @@ def check_lengths(path, clips, profile):
         frames = 0
         for entry in playlist:
             if entry.tag == "blank":
-                # A title track is mostly gap, and the gap is as much a part of
-                # the track's length as the entries are: counting only entries
-                # would report V2 short by every frame with no text on it.
+                # A playlist is mostly gap on a track that was built for a few
+                # clips, and the gap is as much a part of the track's length as
+                # the entries are: counting only entries would report the track
+                # short by every frame that holds nothing.
                 try:
                     frames += int(entry.get("length"))
                 except (TypeError, ValueError):
@@ -941,6 +920,9 @@ def check_lengths(path, clips, profile):
 MIN_PSNR = 24.0            # same shot through a different encoder and scaler
                            # lands near 30 dB; a different shot lands under 15.
 MIN_RENDER_BYTES = 1000    # smaller than this means melt wrote nothing usable
+RENDER_QUIET_SECONDS = 5.0  # a pass that has written nothing for this long, and
+                            # whose file already holds every frame asked for, is
+                            # finished; melt sometimes forgets to exit
 SAMPLE_WINDOW = 21         # frames rendered either side of a sample, so the
                            # +-2 frame search has material to search in
 
@@ -951,25 +933,94 @@ def _profile_for_render(project, near_path):
     return project.profile.write_file(os.path.join(folder, "profile.prof"))
 
 
-def _melt_render(path, out_path, opts, limit, first=0, timeout=600, profile=None):
-    """One melt pass over a frame range. Returns (ok, detail, seconds)."""
+def _melt_render(path, out_path, opts, limit, first=0, timeout=600, profile=None,
+                 fps=None):
+    """One melt pass over a frame range. Returns (ok, detail, seconds).
+
+    Two things here are not decoration.
+
+    `terminate_on_pause` asks melt to stop when the producer pauses at the end.
+    Every producer in these files carries `eof=pause`, and once the titles moved
+    onto V1 there was no trailing blank left to push the multitrack past the
+    last frame, so a pass could write every frame and then sit there: 311 frames
+    in the file, 10.377 s of picture, and a process alive minutes later with its
+    CPU frozen. Before that change V2's trailing blank supplied the extra pull.
+
+    That is also why the wait loop exists: with the same command line, melt
+    exits in 16 s from a console and hangs when started by the task scheduler,
+    so `terminate_on_pause` alone is not enough to rely on. A pass that has
+    stopped writing, and whose file already holds every frame it was asked for,
+    has done its work -- the missing exit is not a missing render. Only the file
+    is trusted for that: no frame count, no early exit.
+    """
     cmd = [MELT]
     if profile:
         cmd += ["-profile", profile]
     cmd += [path, "in=%d" % first, "out=%d" % limit, "-consumer",
-            "avformat:" + out_path] + opts
+            "avformat:" + out_path] + list(opts) + ["terminate_on_pause=1"]
+
     started = time.time()
+    log = tempfile.NamedTemporaryFile(prefix="melt_", suffix=".log", delete=False)
     try:
-        r = probe.run(cmd, timeout=timeout)
-    except subprocess.TimeoutExpired:
-        return False, "melt did not finish in %d s" % timeout, 0.0
-    elapsed = time.time() - started
-    if r.returncode != 0:
-        tail = ((r.stderr or "") + (r.stdout or "")).strip().splitlines()[-3:]
-        return False, "melt exited %d: %s" % (r.returncode, " / ".join(tail)), elapsed
+        with open(log.name, "wb") as sink:
+            proc = subprocess.Popen(cmd, stdout=sink, stderr=subprocess.STDOUT,
+                                    stdin=subprocess.DEVNULL)
+            finished, stalled = False, False
+            last_size, quiet_since = -2, started
+            while True:
+                code = proc.poll()
+                if code is not None:
+                    finished = code == 0
+                    break
+                now = time.time()
+                size = (os.path.getsize(out_path)
+                        if os.path.isfile(out_path) else -1)
+                if size != last_size:
+                    last_size, quiet_since = size, now
+                elif (fps and size > MIN_RENDER_BYTES
+                      and now - quiet_since > RENDER_QUIET_SECONDS
+                      and _pass_complete(out_path,
+                                         (limit - first + 1) / float(fps))):
+                    stalled = True
+                    proc.kill()
+                    break
+                if now - started > timeout:
+                    proc.kill()
+                    proc.wait()
+                    return (False, "melt did not finish in %d s" % timeout,
+                            now - started)
+                time.sleep(0.25)
+            proc.wait()
+        elapsed = time.time() - started
+        tail = ""
+        try:
+            with open(log.name, "r", encoding="utf-8", errors="replace") as fh:
+                tail = " / ".join(fh.read().strip().splitlines()[-3:])
+        except OSError:
+            pass
+    finally:
+        try:
+            os.remove(log.name)
+        except OSError:
+            pass
+
+    if not finished and not stalled:
+        return False, "melt exited %d: %s" % (proc.returncode, tail), elapsed
     if not os.path.isfile(out_path) or os.path.getsize(out_path) < MIN_RENDER_BYTES:
         return False, "melt exited 0 but wrote no usable file", elapsed
+    if stalled:
+        return True, "ok (melt wrote every frame, then would not exit)", elapsed
     return True, "ok", elapsed
+
+
+def _pass_complete(path, seconds):
+    """Does this render already hold the length it was asked for?"""
+    try:
+        data = probe.ffprobe_json(path)
+        duration = float((data.get("format") or {}).get("duration") or 0.0)
+    except (TypeError, ValueError):
+        return False
+    return duration >= seconds - 0.05
 
 
 def render_video(project, path, out_mp4, width=270, crf=34):
@@ -988,7 +1039,8 @@ def render_video(project, path, out_mp4, width=270, crf=34):
         ["f=mp4", "vcodec=libx264", "crf=%d" % crf, "preset=ultrafast",
          "pix_fmt=yuv420p", "s=%dx%d" % (width, height), "an=1",
          "real_time=-1"],
-        project.length - 1, profile=_profile_for_render(project, out_mp4))
+        project.length - 1, profile=_profile_for_render(project, out_mp4),
+        fps=profile.fps)
     if not ok:
         return False, "video pass: " + detail, {}
     data = probe.ffprobe_json(out_mp4)
@@ -1007,7 +1059,8 @@ def render_audio(project, path, out_wav):
         path, out_wav,
         ["f=wav", "acodec=pcm_s16le", "ar=44100", "channels=2", "vn=0",
          "real_time=-1"],
-        project.length - 1, profile=_profile_for_render(project, out_wav))
+        project.length - 1, profile=_profile_for_render(project, out_wav),
+        fps=project.profile.fps)
     if not ok:
         return False, "audio pass: " + detail, {}
     data = probe.ffprobe_json(out_wav)
@@ -1099,7 +1152,8 @@ def _reference_clip(project, index, work_dir, width, crf):
         ["f=mp4", "vcodec=libx264", "crf=%d" % crf, "preset=ultrafast",
          "pix_fmt=yuv420p", "s=%dx%d" % (width, height), "an=1",
          "real_time=-1"],
-        solo.length - 1, profile=_profile_for_render(solo, out_mp4))
+        solo.length - 1, profile=_profile_for_render(solo, out_mp4),
+        fps=project.profile.fps)
     if not ok:
         return None, mid
     return (out_mp4, first), mid
@@ -1414,6 +1468,9 @@ TITLE_QUIET_PSNR = 50.0   # outside its window the two renders are one picture
 TITLE_BAND_MARGIN = 2.5   # dB the named band has to change more than the frame
 TITLE_MIN_LUMA = 20.0     # mean luma of the shot under the text, of 255
 
+BLEND_SERVICES = ("frei0r.cairoblend", "composite", "qtblend")
+SHOTCUT_PSNR_MIN = 45.0   # a rewrite of the multitrack may not move the picture
+
 
 def _crop(src, out, box):
     """Cut a still down to a rectangle of itself, in pixels."""
@@ -1439,15 +1496,16 @@ def check_titles(project, path, work_dir, width=270):
     Both sides are rendered by this writer: the project as planned, and the
     same timeline with the text filters left off. Frame n of one against frame
     n of the other is then the text and nothing else -- same footage, same
-    producer, same track, same compositing path, same encoder -- so nothing
-    here has to guess what the shot looked like. Every other way of building
-    the control changes the picture everywhere: dropping V2 drops the blend
-    with it, and melt skips a blend whose b-frame never arrives, while cairo
-    on its own shifts colour slightly; an empty V2 is a third path again. Any
-    of those moves every frame in the timeline, which is indistinguishable from
-    a title that never starts or stops on time. The two renders are lossless
-    for the same reason: a lossy codec carries a bright title a little way into
-    the frames after it.
+    producer, same track, same encoder -- so nothing here has to guess what the
+    shot looked like. Every other way of building the control changes the
+    picture somewhere: a separate title track needs a blend, and melt treats a
+    blend whose b-frame never arrives differently from one that does, while
+    cairo on its own shifts colour slightly; an empty title track is a third
+    path again. Any of those moves frames that are supposed to be identical,
+    which is indistinguishable from a title that never starts or stops on time.
+    Leaving out exactly two filter elements moves nothing. The two renders are
+    lossless for the same reason: a lossy codec carries a bright title a little
+    way into the frames after it.
     Per title it asserts three things: the frame changed (a title is visible at
     all), the change sits in the band the plan named rather than spread over
     the whole frame (it is where it was asked to be), and the frames just
@@ -1591,8 +1649,207 @@ def check_titles(project, path, work_dir, width=270):
             "%d (%.1f dB)" % (row["frame"], row["whole_psnr"]) for row in quiet)
     if problems:
         return _result("titles", False, "; ".join(problems) + " [" + detail + "]",
-                       samples=rows + quiet)
-    return _result("titles", True, detail, samples=rows + quiet)
+                       samples=rows + quiet, mp4=planned_mp4, control=plain_mp4)
+    return _result("titles", True, detail, samples=rows + quiet,
+                   mp4=planned_mp4, control=plain_mp4)
+
+
+# ---------------------------------------------------------------------------
+# the rewrite Shotcut performs on load, applied to whatever this writer emitted
+# ---------------------------------------------------------------------------
+def _shotcut_rewrite(text):
+    """Every blend's `a_track` set to 0, which is what Shotcut wrote for us.
+
+    On the V2 layout this writer used to emit, Shotcut loaded a blend with
+    a_track=1 and saved it with a_track=0. Nothing else about the transition
+    moved. That one number is the difference between a title on screen and no
+    title at all: melt composites a transition into its a-frame, the background
+    is a-frame 0, and the background is painted before the picture, so a
+    composite that lands there is covered by V1 (measured: the frame came out
+    byte-identical to the same file with the text filters removed). This
+    function performs exactly that rewrite, so the check below can ask whether
+    the titles survive it.
+    """
+    def fix(match):
+        block = match.group(0)
+        if any('<property name="mlt_service">%s</property>' % service in block
+               for service in BLEND_SERVICES):
+            block = re.sub(r'(<property name="a_track">)\d+(</property>)',
+                           r"\g<1>0\g<2>", block)
+        return block
+    return re.sub(r"<transition[^>]*>.*?</transition>", fix, text, flags=re.S)
+
+
+def _strip_text_filters(text):
+    """The same document with the dynamictext filters removed, and nothing else."""
+    return re.sub(r"\s*<filter[^>]*>(?:(?!</filter>).)*?dynamictext.*?</filter>", "",
+                  text, flags=re.S)
+
+
+def _changed_blends(original, rewritten):
+    """How many transition blocks the rewrite actually moved."""
+    before = re.findall(r"<transition[^>]*>.*?</transition>", original, flags=re.S)
+    after = re.findall(r"<transition[^>]*>.*?</transition>", rewritten, flags=re.S)
+    return sum(1 for a, b in zip(before, after) if a != b)
+
+
+def _title_rides_a_blend(root):
+    """Blends, not disabled, whose b-track carries text.
+
+    A title drawn by a track filter does not appear here. A title carried by a
+    separate track does -- either as a filter on that playlist or as a clip on
+    it that carries one -- and that is the shape Shotcut broke: the blend that
+    puts it on screen is the blend Shotcut decides the a-frame of.
+    """
+    def has_text(element):
+        return "dynamictext" in ET.tostring(element, encoding="unicode")
+
+    text_producers = {producer.get("id") for producer in root.findall("producer")
+                      if has_text(producer)}
+    carries_text = set()
+    for playlist in root.findall("playlist"):
+        if has_text(playlist) or any(
+                entry.get("producer") in text_producers
+                for entry in playlist.findall("entry")):
+            carries_text.add(playlist.get("id"))
+    video = [track.get("producer")
+             for track in root.find("tractor").findall("track")
+             if track.get("hide") != "video"]
+    rides = []
+    for transition in root.find("tractor").findall("transition"):
+        service = transition.findtext("property[@name='mlt_service']")
+        if service not in BLEND_SERVICES:
+            continue
+        if transition.findtext("property[@name='disable']") == "1":
+            continue
+        try:
+            b_track = int(transition.findtext("property[@name='b_track']") or -1)
+        except ValueError:
+            continue
+        if 0 <= b_track < len(video) and video[b_track] in carries_text:
+            rides.append((service, b_track, video[b_track]))
+    return rides
+
+
+def check_shotcut(project, path, work_dir, width=270, proof=None, control=None):
+    """7. The titles survive what Shotcut does to the multitrack.
+
+    The sixth check passed while the GUI showed no title, so it was measuring
+    the wrong side of the problem: melt rendering a file says nothing about what
+    an editor does to that file before it renders it. Shotcut rewrote the V2
+    blend from a_track=1 to a_track=0 and the title went with it.
+
+    So this check renders the project *after* that rewrite and asks the sixth
+    check's question again -- is the text on screen, in its band -- against the
+    same file with the text filters taken out. It also refuses the shape that
+    caused the failure: a blend, not disabled, whose b-track carries the text.
+    When the rewrite changes nothing (it should not: no blend carries the
+    picture any more) the detail says so, rather than implying that surviving a
+    rewrite that changes nothing is the same as surviving the editor.
+    """
+    if not project.has_titles:
+        return _result("shotcut", False,
+                       "the plan has no titles, so there is nothing to measure here")
+    fps = project.profile.fps
+    guard.ensure_dir(work_dir)
+
+    root = ET.parse(path).getroot()
+    problems = ["the text is carried by track %d and put on screen by a %s "
+                "blend -- a transition whose a-frame Shotcut decides, which is "
+                "how the titles were lost once already" % (index, service)
+                for service, index, _producer in _title_rides_a_blend(root)]
+    if problems:
+        return _result("shotcut", False, "; ".join(problems))
+
+    with open(path, "r", encoding="utf-8") as fh:
+        original = fh.read()
+    rewritten = _shotcut_rewrite(original)
+    changed = rewritten != original
+
+    renders = {}
+    # With nothing for the rewrite to move, the two pictures it would produce
+    # are the two the titles check already rendered from this very file. Reuse
+    # them: same file, same frames, same encoder, so the two checks cannot
+    # disagree -- and the cost of this check is paid only when there is a blend
+    # on screen for Shotcut to rewrite, which is the case it exists for.
+    if not changed and proof and control and os.path.isfile(proof) \
+            and os.path.isfile(control):
+        renders = {"asshotcut": proof, "asshotcut_notext": control}
+    for suffix, body in (("asshotcut", rewritten),
+                         ("asshotcut_notext", _strip_text_filters(rewritten))):
+        if suffix in renders:
+            continue
+        target = os.path.join(work_dir, project.name + "_" + suffix + ".mlt")
+        guard.write_text(target, body)
+        mp4 = os.path.join(work_dir, project.name + "_" + suffix + ".mp4")
+        if os.path.isfile(mp4):
+            os.remove(mp4)
+        ok, detail, _info = render_video(project, target, mp4, width=width, crf=0)
+        if not ok:
+            return _result("shotcut", False, "no %s picture: %s" % (suffix, detail))
+        renders[suffix] = mp4
+
+    size = (int(width), int(round(width * project.profile.height /
+                                  float(project.profile.width) / 2.0)) * 2)
+    rows = []
+
+    def at(label, frame, box=None):
+        """PSNR between the rewritten render and its own no-text twin."""
+        a = os.path.join(work_dir, "shotcut_a.png")
+        b = os.path.join(work_dir, "shotcut_b.png")
+        for stale in (a, b):
+            if os.path.isfile(stale):
+                os.remove(stale)
+        if not (_frame(renders["asshotcut"], frame / fps, a, size)
+                and _frame(renders["asshotcut_notext"], frame / fps, b, size)):
+            problems.append("%s: could not pull frame %d from both renders"
+                            % (label, frame))
+            return None
+        if box:
+            ca = os.path.join(work_dir, "shotcut_a_band.png")
+            cb = os.path.join(work_dir, "shotcut_b_band.png")
+            if not (_crop(a, ca, box) and _crop(b, cb, box)):
+                problems.append("%s: could not crop the title band" % label)
+                return None
+            a, b = ca, cb
+        return _psnr(a, b)
+
+    for index, title in enumerate(project.titles):
+        band = TITLE_BANDS[title["position"]]
+        box = (0, int(round(size[1] * float(band[1].rstrip("%")) / 100.0)),
+               size[0],
+               max(int(round(size[1] * float(band[3].rstrip("%")) / 100.0)), 2))
+        frame = title["at"] + (title["frames"] - 1) // 2
+        whole = at("title %d" % (index + 1), frame)
+        if whole is None:
+            continue
+        band_db = at("title %d band" % (index + 1), frame, box)
+        rows.append({"title": index + 1, "frame": frame,
+                     "whole_psnr": round(whole, 2),
+                     "band_psnr": None if band_db is None else round(band_db, 2)})
+        if whole > TITLE_PSNR_MAX:
+            problems.append("title %d is gone after the rewrite Shotcut performs "
+                            "on load: frame %d reads %.1f dB against the same "
+                            "file without the text, i.e. the screen did not change"
+                            % (index + 1, frame, whole))
+        if band_db is not None and band_db >= whole - TITLE_BAND_MARGIN:
+            problems.append("title %d: the %s band changed by about as much as "
+                            "the whole frame after the rewrite (%.1f vs %.1f dB)"
+                            % (index + 1, title["position"], band_db, whole))
+
+    detail = ("%s; %s"
+              % ("the rewrite changes no blend (none carries the picture)"
+                 if not changed else "the rewrite changes %d blend(s)"
+                 % _changed_blends(original, rewritten),
+                 ", ".join("title %d frame %d: band %s / frame %.1f dB"
+                           % (row["title"], row["frame"],
+                              "n/a" if row["band_psnr"] is None
+                              else "%.1f" % row["band_psnr"],
+                              row["whole_psnr"]) for row in rows)))
+    if problems:
+        return _result("shotcut", False, "; ".join(problems) + " [" + detail + "]",
+                       samples=rows)
+    return _result("shotcut", True, detail, samples=rows)
 
 
 # ---------------------------------------------------------------------------
@@ -1702,6 +1959,7 @@ def build(plan_path, out_root=None, width=270, crf=34, samples=3, checks=None):
         order.append("fade")
     if project.has_titles:
         order.append("titles")
+        order.append("shotcut")
     wanted = [c.lower() for c in (checks or order)]
     unknown = [name for name in wanted if name not in order]
     if unknown:
@@ -1729,6 +1987,11 @@ def build(plan_path, out_root=None, width=270, crf=34, samples=3, checks=None):
     if "titles" in wanted:
         results.append(check_titles(project, path, os.path.join(folder, "check"),
                                     width=width))
+    if "shotcut" in wanted:
+        titles = next((c for c in results if c["name"] == "titles" and c["ok"]), {})
+        results.append(check_shotcut(project, path, os.path.join(folder, "check"),
+                                     width=width, proof=titles.get("mp4"),
+                                     control=titles.get("control")))
 
     result = {"plan": plan, "project": project, "path": path, "folder": folder,
               "checks": results, "skipped": skipped}
@@ -1783,7 +2046,7 @@ def _digest(result):
         lines += ["", "titles"]
         for index, title in enumerate(project.titles):
             lines.append("  %d  %-11s %-29r frames %d-%d  %d f  %s, %d px, %s"
-                         % (index, title["producer"], title["text"],
+                         % (index, title["label"], title["text"],
                             title["at"], title["at"] + title["frames"] - 1,
                             title["frames"], title["position"], title["size"],
                             title["colour"]))

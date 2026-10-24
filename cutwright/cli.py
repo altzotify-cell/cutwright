@@ -679,9 +679,9 @@ def build_parser():
     p.add_argument("--samples", type=int, default=3,
                    help="how many clips to compare frames for (default 3)")
     p.add_argument("--checks", metavar="LIST",
-                   help="subset of xml,effects,lengths,render,fade,titles to run "
-                        "(default: all of them; fade and titles only when the "
-                        "plan has one)")
+                   help="subset of xml,effects,lengths,render,fade,titles,shotcut "
+                        "to run (default: all of them; fade, titles and shotcut "
+                        "only when the plan has one)")
     p.set_defaults(func=cmd_build)
 
     p = sub.add_parser("transcribe",

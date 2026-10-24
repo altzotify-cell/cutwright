@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-24T13:44:28",
+  "generated": "2026-10-24T14:47:08",
   "plan": "projects\\demo_title\\plan.json",
   "project": "projects\\demo_title\\demo_title.mlt",
   "shotcut": "26.9.27",
@@ -51,7 +51,7 @@
     {
       "name": "xml",
       "ok": true,
-      "detail": "163 element(s), 22 id(s), 14 reference(s) resolve, records Shotcut 26.9.27 / MLT 7.41.0"
+      "detail": "127 element(s), 17 id(s), 11 reference(s) resolve, records Shotcut 26.9.27 / MLT 7.41.0"
     },
     {
       "name": "effects",
@@ -71,32 +71,31 @@
     {
       "name": "lengths",
       "ok": true,
-      "detail": "311 frames (10.377 s) = 120 + 102 + 89; A1 311, Background 311, V1 311, V2 311",
+      "detail": "311 frames (10.377 s) = 120 + 102 + 89; A1 311, Background 311, V1 311",
       "per_track": {
         "Background": 311,
         "V1": 311,
-        "V2": 311,
         "A1": 311
       }
     },
     {
       "name": "render",
       "ok": true,
-      "detail": "311/311 frames, 10.377 s of audio, 26.0 dB, 34.4 dB, 31.6 dB, control 13.4 dB, audio -23.9 dB vs source -23.5 dB, 35.3 s to render at 270x480",
+      "detail": "311/311 frames, 10.377 s of audio, 26.0 dB, 34.4 dB, 31.6 dB, control 13.4 dB, audio -23.9 dB vs source -23.5 dB, 25.9 s to render at 270x480",
       "samples": [
         {
           "clip": 0,
           "at_s": 2.002,
           "source_frame": 60,
           "offset_frames": -1,
-          "psnr": 26.0
+          "psnr": 26.02
         },
         {
           "clip": 1,
           "at_s": 5.706,
           "source_frame": 1076,
           "offset_frames": 0,
-          "psnr": 34.39
+          "psnr": 34.35
         },
         {
           "clip": 2,
@@ -106,7 +105,7 @@
           "psnr": 31.56
         }
       ],
-      "control": 13.42154,
+      "control": 13.413704,
       "mp4": "C:\\Users\\user\\Desktop\\Cutwright\\projects\\demo_title\\check\\proof.mp4",
       "wav": "C:\\Users\\user\\Desktop\\Cutwright\\projects\\demo_title\\check\\proof.wav"
     },
@@ -237,6 +236,27 @@
           "title": 2,
           "frame": 258,
           "whole_psnr": Infinity
+        }
+      ],
+      "mp4": "C:\\Users\\user\\Desktop\\Cutwright\\projects\\demo_title\\check\\demo_title_titles.mp4",
+      "control": "C:\\Users\\user\\Desktop\\Cutwright\\projects\\demo_title\\check\\demo_title_no_titles.mp4"
+    },
+    {
+      "name": "shotcut",
+      "ok": true,
+      "detail": "the rewrite changes no blend (none carries the picture); title 1 frame 61: band 20.0 / frame 26.2 dB, title 2 frame 224: band 26.3 / frame 32.4 dB",
+      "samples": [
+        {
+          "title": 1,
+          "frame": 61,
+          "whole_psnr": 26.18,
+          "band_psnr": 19.98
+        },
+        {
+          "title": 2,
+          "frame": 224,
+          "whole_psnr": 32.42,
+          "band_psnr": 26.26
         }
       ]
     }

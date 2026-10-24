@@ -3,12 +3,13 @@
 Agent control of a Desktop video-editing fork: perception first, editing second.
 
 The half that writes an edit today is `build`: a JSON list of cuts goes in, a
-Shotcut `.mlt` project comes out, and six checks prove the file is what it
+Shotcut `.mlt` project comes out, and seven checks prove the file is what it
 claims to be -- the XML resolves, every effect name exists in the installed
 Shotcut, the track lengths add up, a small render really shows the frames the
 edit asked for, a fade (if the plan asks for one) really darkens the picture and
-the sound at the ends it was asked for, and a title really appears in the band
-and frames the plan gave it.
+the sound at the ends it was asked for, a title really appears in the band and
+frames the plan gave it, and the title survives the rewrite Shotcut performs on
+that file when it opens it.
 
 This is a **self-contained fork**. All copied code and text lives in `vendor/`
 with a SHA256 manifest. Footage is never copied -- source files are referenced
@@ -69,7 +70,7 @@ Cutwright\
     moments.py      transcript -> beats -> ranked candidate moments
     frames.py       frame verification: grade picks against pictures
     transcribe.py   whisper.cpp fallback: produce a transcript, gate it too
-    mlt.py          plan -> Shotcut .mlt, then the six checks on the file
+    mlt.py          plan -> Shotcut .mlt, then the seven checks on the file
     cli.py          doctor / probe / subs / moments / verify / transcribe / build
   projects\<name>\   plan.json + <name>.mlt + checks.json + digest.txt + check\
   out\<video>\      per-video analysis output
@@ -152,6 +153,7 @@ and then checks the file it just wrote:
 | `render` | a small render really shows the source frames the edit claims: PSNR against the same frames rendered through the same pipeline, plus the audio level per clip |
 | `fade` | when the plan asks for a fade: rendered twice, with and without it, frame against frame -- black at the outer frame, full just outside, an eased ramp in the middle, untouched in between, and the sound measured the same way |
 | `titles` | when the plan asks for a title: rendered twice, with and without the text filters, frame against frame -- the frame changed, the change is inside the band the plan named, and the frames just outside the window are identical |
+| `shotcut` | when the plan asks for a title: refuses a title that is put on screen by a blend (the shape Shotcut rewrites), then renders the project **after** that rewrite and asks the same question again -- the text is still in its band on the frames the plan gave it |
 
 The render check compares against a **reference rendered by this same writer**
 rather than against the source decoded by ffmpeg. Measured on a clip that was
@@ -170,7 +172,7 @@ strings, nothing to round twice. Shotcut 26.9.27 and MLT 7.41.0 are recorded in
 the root `title` and in `cutwright:` properties, and `xml` fails if either
 disagrees with the binaries on disk.
 
-Three melt behaviours are worth knowing, all measured rather than guessed:
+Four melt behaviours are worth knowing, all measured rather than guessed:
 
 * A single pass that encodes a project **with audio** reaches the last frame and
   then never exits (`melt` sits at 99% forever). melt's own serialized XML does
@@ -180,6 +182,15 @@ Three melt behaviours are worth knowing, all measured rather than guessed:
   `in=` to the trim start double-counts it: clip 2 started at source frame 1415
   and landed at 2830, past the end, frozen on the last frame. Producers now span
   the whole file and the entries carry the trim.
+* A pass over a project whose **last entry ends on the timeline's last frame**
+  can write every frame and then never exit -- the same symptom as above, from a
+  different cause: with `eof=pause` on every producer, nothing pulls the
+  multitrack past the end. It appeared when the titles moved onto V1 and the
+  trailing blank that used to supply that pull went with the V2 track: 311
+  frames and 10.377 s in the file, a process still alive minutes later with its
+  CPU frozen. The consumer is now told `terminate_on_pause=1`, and the wait loop
+  additionally trusts only the file -- a pass that has stopped writing and whose
+  file already holds the length it was asked for is finished.
 * melt renders on **its own default profile, 25 fps**, no matter what the
   `<profile>` element says, unless it is told on the command line. Producers get
   the file's profile; filters and the consumer do not. Measured: a hard cut at
@@ -246,36 +257,51 @@ A plan can put text on screen for a stretch of frames, in one of three bands:
 8%, 38% and 68% down. White text, black outline, weight 700, centred in the band.
 `size` is pixels of font height in the project's own resolution, default 64.
 
-Each title becomes its own producer on a **V2** track: a `color` producer at
-`0x00000000` (fully transparent, `mlt_image_format=rgba`) with one
-`dynamictext` filter on it -- which is exactly how Shotcut writes "Text: Simple".
-The filter draws into that transparent frame and the track is composited over V1
-with alpha, so the picture underneath is untouched and still editable, and the
-gaps between titles are plain `<blank>`s on the track. Two titles may not overlap.
+Each title becomes one `dynamictext` filter with an `in`/`out` window, written
+**inside the V1 playlist** -- a track filter, which is what Shotcut writes when
+you add a filter to a track and what it writes back unchanged when it saves. The
+filter draws onto the picture the track is already showing, so there is no
+compositing step between tracks at all, the footage underneath is untouched, and
+two titles may not overlap because two filters on one track would both draw.
 
-One melt behaviour is load-bearing here, and it cost the longest to find: **the
-`a_track` of a blend has to be the track immediately below, not the
-background.** Shotcut writes `a_track=0` for every transition in its own files,
-this writer copied that, and the titles were invisible -- silently, with no error
-from melt. A three-track probe settled it: black on V0, green on V1, red on V2,
-`composite` from `a=0, b=2` changed nothing at all, while `a=1, b=2` put red over
-green in the half of the frame it was asked for. Same file, same transition, one
-attribute different. The blends on this timeline now default to `a_track =
-b_track - 1`. The audio `mix` transitions are the exception and keep `a_track=0`,
-because audio sums into the background frame rather than onto the picture below
--- only cairoblend needs the running track as its a-frame. With the blend fixed
-the demo's titles appear (centre band YMAX 195 -> 250).
+The obvious shape was a title track: a transparent `color` producer on **V2**
+with the text on it, blended down onto V1. It renders, and it is how a title
+*looks* in the GUI -- but it put the title on screen through a transition, and
+the transition's `a_track` turned out to be the whole argument:
+
+* With `a_track=1` (the track below), melt draws the text over V1. That is what
+  this writer emitted, and the `titles` check passed 6/6 on it.
+* Shotcut, opening that same file, rebuilt the blend with **`a_track=0`** and
+  saved it that way. With `a=0` the composite lands in the background frame,
+  which is painted *under* V1, so the title is covered -- and melt agrees: a
+  frame from Shotcut's own saved copy is byte-identical to the same file with
+  the text filters removed. The GUI showed no title because, in the file it had
+  written, there was no title.
+* A title on a track therefore depends on a number the editor owns and rewrites.
+  A title on a track *filter* does not: there is no transition for Shotcut to
+  re-decide, so the GUI and melt render the same frames by construction.
 
 The `titles` check renders the project **twice from this writer**, lossless, and
 compares frame n against frame n. The control is the same timeline with only the
-`dynamictext` element left out: same footage, same transparent producer, same
-track, same compositing path, same encoder, so the difference between the two is
-the text and nothing else. Every other way of building that control was measured
-and rejected -- dropping V2 drops the blend with it and moves *every* frame in
-the timeline (cairo alone shifts colour by about 33 dB), and an empty V2 is a
-third compositing path again; either one drowns a title that starts or stops on
-the wrong frame. Lossless for the same reason: under H.264, a bright title
-carries into the frames just after it and they read 33 dB instead of identical.
+two `dynamictext` elements left out -- same footage, same track, same encoder --
+so the difference between the two is the text and nothing else. Every other way
+of building that control was measured and rejected: dropping a title track drops
+its clip and its blend with it and moves *every* frame (cairo alone shifts colour
+by about 33 dB), and an empty title track is a third compositing path again;
+either one drowns a title that starts or stops on the wrong frame. Lossless for
+the same reason: under H.264, a bright title carries into the frames just after
+it and they read 33 dB instead of identical.
+
+The `shotcut` check exists because all of that passed while the GUI showed
+nothing. It takes the file this writer just wrote, applies the rewrite Shotcut
+performed on it -- every blend's `a_track` set to 0 -- and renders both sides of
+that rewrite, asking the `titles` question again. It also refuses the shape
+outright: a blend, not disabled, whose b-track carries text is a failure before
+any render, because that is exactly the construct that disappeared. Measured on
+the old V2 file with the structural guard bypassed, it reports `title 1 is gone
+after the rewrite ... frame 61 reads inf dB against the same file without the
+text`; on the file this writer emits now it reports `the rewrite changes no blend
+(none carries the picture)`.
 
 Per title it asserts three things. The frame changed at all (`15 dB < PSNR <
 45 dB`: text is white on a dark shot, so it moves a lot of pixels but the shot
@@ -382,10 +408,11 @@ approval; it is only unpacked, never launched as a GUI by this tool. `build` has
 written `projects\demo_cuts\demo_cuts.mlt` (three cuts, no fade),
 `projects\demo_fade\demo_fade.mlt` (the same three cuts under a 0.8 s fade in and
 a 1.0 s fade out, picture and sound) and `projects\demo_title\demo_title.mlt`
-(the same three cuts, the fade, and two titles on V2), and all six checks pass on
-all three. `demo_cuts` has been opened in the Shotcut GUI: three clips on V1 with
-their labels, three on A1 with waveforms, ruler reading `00:00:10.377`.
-`demo_fade` and `demo_title` have not been opened by hand yet -- what is proven
-about them is what the checks measure: melt renders them to the right frames, the
-ramp and the text are where the plan asked for them, the sound follows, the XML
-is well formed, and every effect name in them exists in this Shotcut.
+(the same three cuts, the fade, and two titles drawn on V1), and all seven checks
+pass on all three. `demo_cuts` has been opened in the Shotcut GUI: three clips on
+V1 with their labels, three on A1 with waveforms, ruler reading `00:00:10.377`.
+`demo_fade` has not been opened by hand. `demo_title` has: it is what showed the
+V2 blend losing its title in the preview while melt drew it, which is why the
+titles are track filters now, and why the `shotcut` check renders the file after
+the rewrite that caused it -- what the checks measure is melt rendering what
+Shotcut is left with, not melt rendering what this tool hoped it wrote.

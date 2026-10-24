@@ -3,8 +3,11 @@
 What is built, what each demo project is, and exactly what to look for when you
 open it. `LOG.md` is the timestamped working log; `README.md` is the reference.
 
-As of 2026-10-24: **fade in / fade out and titles are built and passing their
-checks.** Transition, music-dipping, the planner and the end-to-end run are not.
+As of 2026-10-24: **fade in / fade out and titles are built and passing seven
+checks.** The titles were re-done after the Shotcut GUI showed none of them: they
+are track filters on V1 now, not clips on a V2 track, and a `shotcut` check
+renders the file after the rewrite that hid them. Transition, music-dipping, the
+planner and the end-to-end run are not.
 
 ## Demo projects
 
@@ -65,47 +68,56 @@ the ramp where I expect it" is the one thing only opening it can prove.
 
 ### `projects\demo_title\demo_title.mlt` -- the same three cuts, fading, with two titles
 
-The same cuts and the same 0.8 s / 1.0 s fade, plus two titles on their own
-**V2** track: `the three cuts` at 72 px in the middle band for 0.9-3.2 s (frames
-27-95), and `the word is meat` at 48 px in the lower band for 6.4-8.6 s (frames
-192-257). 311 frames, 10.377 s. V2 exists only because the plan asked for titles.
+The same cuts and the same 0.8 s / 1.0 s fade, plus two titles drawn on **V1**:
+`the three cuts` at 72 px in the middle band for 0.9-3.2 s (frames 27-95), and
+`the word is meat` at 48 px in the lower band for 6.4-8.6 s (frames 192-257).
+311 frames, 10.377 s. There is no third track: each title is one `dynamictext`
+filter on the picture track, with an `in`/`out` window.
 
 What to look for:
 
-1. **V2 is a third video track**, above V1 and below A1, with two clips and
-   nothing else. Each clip's caption is the title's own text.
+1. **V1 has three clips and two track filters.** Select V1 in the timeline (or
+   press the track-head "Filters" button) and the Filters panel lists
+   `Text: Simple` twice, once for each title, with the times the plan asked for.
 2. **The first title sits over the opening shot** (0.9 s in, once the fade has
    finished opening), centred vertically, white with a black outline so it reads
-   over the picture. Nothing is drawn underneath it: the track is a transparent
-   producer, so the shot is untouched and every clip is still trimmable.
-3. **The gap between the titles is blank, not black.** Between 3.2 s and 6.4 s
-   V2 carries only a blank, and the frame there is identical to the same frame of
-   the same project with the text left off.
+   over the picture. The clip under it is untouched and still trimmable.
+3. **Between the titles nothing is drawn.** From 3.2 s to 6.4 s there is no
+   filter window, and the frame there is identical to the same frame of the same
+   project with the text left off.
 4. **The second title crosses a cut.** It starts at 6.4 s, inside the second clip,
    and the cut to the third clip is at 7.4 s (frame 222), so the same text stays
    on screen across the cut rather than being tied to a clip.
 5. **The envelope at the ends is respected**: the first title appears after the
-   fade in has finished, and both titles are sharp, not dimmed -- the fade is on
-   the program, the text rides on top of it.
+   fade in has finished, and both titles are dimmed by the fade like the picture,
+   because the fade is two filters on the program and the text is on the track
+   under it.
 6. **The ruler still reads `00:00:10.377`** and A1 still holds the three clips
-   with waveforms: the title track changed nothing about the edit.
+   with waveforms: the titles changed nothing about the edit.
 7. Playback: the text does not flicker or slide, it holds still in its band, and
    it is gone on the frame after its out point.
 
-Not yet opened by hand. The checks measure it: at the first, middle and last
-frame of title 1 the frame changes by 29.5 / 26.2 / 26.8 dB against the same
-frame without the text, with 23.3 / 20.0 / 20.6 dB inside the middle band and
-less elsewhere; title 2 reads 29.9 / 32.4 / 27.5 dB whole-frame with 23.8 / 26.3
-/ 21.3 dB in the lower band; and frames 25, 96, 190 and 258 -- the frames just
-outside both windows -- are **identical** to the control render.
+This is the project that failed in the GUI. It used to carry the titles as clips
+on a V2 track, blended down onto V1 with `a_track=1`; melt drew them and the six
+checks passed, while Shotcut's preview showed the bare shot -- it rebuilds that
+blend with `a_track=0`, which lands the composite in the background frame, under
+V1. `demo_title_saved.mlt`, in the same folder, is Shotcut's own save of that
+version and is kept as the evidence. What the checks measure now: at the first,
+middle and last frame of title 1 the frame changes by 29.5 / 26.2 / 26.8 dB
+against the same frame without the text, with 23.3 / 20.0 / 20.6 dB inside the
+middle band and less elsewhere; title 2 reads 29.9 / 32.4 / 27.5 dB whole-frame
+with 23.8 / 26.3 / 21.3 dB in the lower band; frames 25, 96, 190 and 258 -- just
+outside both windows -- are **identical** to the control render; and the
+`shotcut` check re-renders the project after that rewrite and finds the same
+text in the same bands.
 
 ## Check results, as recorded in each `checks.json`
 
-| project | xml | effects | lengths | render | fade | titles |
-|---|---|---|---|---|---|---|
-| `demo_cuts` | 83 elements, 11 ids, 11 refs | 4 names | 311 f = 120+102+89 | 30.6 / 34.5 / 31.5 dB, control 13.5 dB | -- (no fade in the plan) | -- (no titles in the plan) |
-| `demo_fade` | 99 elements, 15 ids, 11 refs | 6 names (+ brightness, volume) | 311 f = 120+102+89 | 30.7 / 34.4 / 31.5 dB, control 13.5 dB | level 0.00 / 0.28 / 0.99 and 1.00 / 0.45 / 0.01, body 0.99-1.00 | -- (no titles in the plan) |
-| `demo_title` | 163 elements, 22 ids, 14 refs | 7 names (+ dynamictext, color, frei0r.cairoblend, mix) | 311 f = 120+102+89; V2 311 too | 26.0 / 34.4 / 31.6 dB, control 13.4 dB | level 0.00 / 0.28 / 0.99 and 1.00 / 0.45 / 0.00, body 0.99-1.00 | band 23.3 / 20.0 / 20.6 dB against 29.5 / 26.2 / 26.8 dB whole-frame, identical outside the window |
+| project | xml | effects | lengths | render | fade | titles | shotcut |
+|---|---|---|---|---|---|---|---|
+| `demo_cuts` | 83 elements, 11 ids, 11 refs | 4 names | 311 f = 120+102+89 | 30.6 / 34.5 / 31.5 dB, control 13.5 dB | -- (no fade in the plan) | -- (no titles in the plan) | -- (no titles in the plan) |
+| `demo_fade` | 99 elements, 15 ids, 11 refs | 6 names (+ brightness, volume) | 311 f = 120+102+89 | 30.7 / 34.4 / 31.5 dB, control 13.5 dB | level 0.00 / 0.28 / 0.99 and 1.00 / 0.45 / 0.01, body 0.99-1.00 | -- (no titles in the plan) | -- (no titles in the plan) |
+| `demo_title` | 127 elements, 17 ids, 11 refs | 7 names (+ dynamictext, color, frei0r.cairoblend, mix) | 311 f = 120+102+89; A1 311, Background 311, V1 311 | 26.0 / 34.4 / 31.6 dB, control 13.4 dB | level 0.00 / 0.28 / 0.99 and 1.00 / 0.45 / 0.00, body 0.99-1.00 | band 23.3 / 20.0 / 20.6 dB against 29.5 / 26.2 / 26.8 dB whole-frame, identical outside the window | the rewrite changes no blend; title 1 frame 61 band 20.0 / frame 26.2 dB, title 2 frame 224 band 26.3 / frame 32.4 dB |
 
 The `render` numbers are PSNR against the same frames put through the same
 pipeline: 30-35 dB for a correct clip, 13.5 dB for a deliberately mismatched
