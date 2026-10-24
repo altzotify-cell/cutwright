@@ -1,0 +1,14 @@
+{
+    "template": "probe.vpj",
+    "output": "../out/cut6-flip.vpj",
+    "sequenceName": "Flip Test",
+    "media": [
+        { "id": "asym", "path": "../out/testmedia/asym.mp4" }
+    ],
+    "segments": [
+        { "source": "asym", "start": 0, "end": 3000, "flip": "horizontal" },
+        { "source": "asym", "start": 0, "end": 3000, "flip": "vertical" },
+        { "source": "asym", "start": 0, "end": 3000, "flip": "both", "split": [ 1500 ] },
+        { "source": "asym", "start": 0, "end": 3000, "flip": "none" }
+    ]
+}

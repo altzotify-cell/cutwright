@@ -1,0 +1,16 @@
+{
+    "template":  "probe.vpj",
+    "output":  "../out/cut3-addmedia.vpj",
+    "sequenceName":  "Add Media Test",
+    "media":  [
+                  {
+                      "id":  "bars",
+                      "path":  "../out/testmedia/bars.mp4"
+                  }
+              ],
+    "segments":  [
+                     { "source":  1,        "start":  0,      "end":  15000 },
+                     { "source":  "bars",   "start":  0,      "end":  6000 },
+                     { "source":  1,        "start":  900000, "end":  915000 }
+                 ]
+}

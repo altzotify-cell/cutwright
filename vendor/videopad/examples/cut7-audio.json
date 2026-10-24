@@ -1,0 +1,14 @@
+{
+    "template": "probe.vpj",
+    "output": "../out/cut7-audio.vpj",
+    "sequenceName": "Audio Gain Test",
+    "media": [
+        { "id": "asym", "path": "../out/testmedia/asym.mp4" }
+    ],
+    "segments": [
+        { "source": "asym", "start": 0, "end": 3000, "audioGainDb": 0 },
+        { "source": "asym", "start": 0, "end": 3000, "audioGainDb": -6 },
+        { "source": "asym", "start": 0, "end": 3000, "audioGainDb": -12, "split": [ 1500 ] },
+        { "source": "asym", "start": 0, "end": 3000, "mute": true }
+    ]
+}

@@ -1,0 +1,1 @@
+Put still images here (jpg/png). A segment uses one via "image", or name it <segment id>.png.

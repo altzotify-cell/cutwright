@@ -1,0 +1,53 @@
+{
+    "template": "probe.vpj",
+    "output": "../out/cut9-filters.vpj",
+    "sequenceName": "Filters Test",
+    "media": [
+        { "id": "bars", "path": "../out/testmedia/bars.mp4" }
+    ],
+    "segments": [
+        { "source": "bars", "start": 0, "end": 2000 },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "blur", "params": { "intensity": 25 } } ]
+        },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "blur", "params": { "intensity": 100 } } ]
+        },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [
+                { "name": "blur", "params": { "intensity": 100 } },
+                { "name": "blur", "params": { "intensity": 100 } }
+            ]
+        },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "noise", "params": { "intensity": 80 } } ]
+        },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "noise", "params": { "intensity": 80, "saturation": 100 } } ]
+        },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "noise", "params": { "intensity": 80, "coverage": 50 } } ]
+        },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "noise", "params": { "intensity": 80, "coverage": 10 } } ]
+        },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "noise", "params": { "intensity": 20 } } ]
+        },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [
+                { "name": "blur", "params": { "intensity": 40 } },
+                { "name": "noise", "params": { "intensity": 30, "coverage": 60 } }
+            ]
+        }
+    ]
+}

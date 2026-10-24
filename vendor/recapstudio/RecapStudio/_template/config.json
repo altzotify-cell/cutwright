@@ -1,0 +1,27 @@
+{
+  "fps": 24,
+  "width": 1920,
+  "height": 1080,
+  "sample_rate": 48000,
+  "tts": {
+    "engine": "",
+    "edge_voice": "en-US-ChristopherNeural",
+    "edge_rate": "+0%",
+    "elevenlabs_voice_id": "",
+    "minimax_voice": "male-qn-qingse",
+    "elevenlabs_model": "eleven_v3",
+    "elevenlabs_stability": 0.5
+  },
+  "tiktok": {
+    "width": 1080,
+    "height": 1920,
+    "fps": 30
+  },
+  "subtitles": {
+    "max_chars_per_line": 42,
+    "max_lines": 2
+  },
+  "fill": "pad",
+  "keep_audio_volume": 0.3,
+  "music_volume": 0.12
+}

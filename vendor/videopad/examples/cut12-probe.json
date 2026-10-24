@@ -1,0 +1,150 @@
+{
+    "template":  "probe.vpj",
+    "output":  "../out/cut12-probe.vpj",
+    "sequenceName":  "Effect ID Probe",
+    "media":  [
+                  {
+                      "id":  "bars",
+                      "path":  "../out/testmedia/bars.mp4"
+                  }
+              ],
+    "segments":  [
+                     {
+                         "source":  "bars",
+                         "start":  0,
+                         "end":  2000
+                     },
+                     {
+                         "source":  "bars",
+                         "start":  0,
+                         "end":  2000,
+                         "effects":  [
+                                         {
+                                             "id":  38,
+                                             "data":  "w=value%3D0.100000%26userdata%3D0%26keys%3D0\u0026r=value%3D50.000000%26userdata%3D0%26keys%3D0\u0026g=value%3D100.000000%26userdata%3D0%26keys%3D0\u0026b=value%3D255.000000%26userdata%3D0%26keys%3D0\u0026s=1",
+                                             "name":  "probe38"
+                                         }
+                                     ]
+                     },
+                     {
+                         "source":  "bars",
+                         "start":  0,
+                         "end":  2000,
+                         "effects":  [
+                                         {
+                                             "id":  39,
+                                             "data":  "w=value%3D0.200000%26userdata%3D0%26keys%3D0\u0026s=value%3D0.500000%26userdata%3D0%26keys%3D0\u0026r=value%3D0.000000%26userdata%3D0%26keys%3D0\u0026g=value%3D0.000000%26userdata%3D0%26keys%3D0\u0026b=value%3D0.000000%26userdata%3D0%26keys%3D0",
+                                             "name":  "probe39"
+                                         }
+                                     ]
+                     },
+                     {
+                         "source":  "bars",
+                         "start":  0,
+                         "end":  2000,
+                         "effects":  [
+                                         {
+                                             "id":  42,
+                                             "data":  "rgbcount=2\u0026rgbx0=0\u0026rgby0=0\u0026rgbx1=255\u0026rgby1=255\u0026redcount=2\u0026redx0=0\u0026redy0=0\u0026redx1=255\u0026redy1=255\u0026greencount=2\u0026greenx0=0\u0026greeny0=0\u0026greenx1=255\u0026greeny1=255\u0026bluecount=2\u0026bluex0=0\u0026bluey0=0\u0026bluex1=255\u0026bluey1=255",
+                                             "name":  "probe42"
+                                         }
+                                     ]
+                     },
+                     {
+                         "source":  "bars",
+                         "start":  0,
+                         "end":  2000,
+                         "effects":  [
+                                         {
+                                             "id":  43,
+                                             "data":  "value=0.250000\u0026userdata=0\u0026keys=0",
+                                             "name":  "probe43"
+                                         }
+                                     ]
+                     },
+                     {
+                         "source":  "bars",
+                         "start":  0,
+                         "end":  2000,
+                         "effects":  [
+                                         {
+                                             "id":  63,
+                                             "data":  "enabled=value%3D1%26userdata%3D0%26keys%3D0\u0026type=0\u0026positionx=value%3D0.000000%26userdata%3D0%26keys%3D0\u0026positiony=value%3D0.000000%26userdata%3D0%26keys%3D0\u0026sizex=value%3D10.000000%26userdata%3D0%26keys%3D0\u0026sizey=value%3D10.000000%26userdata%3D0%26keys%3D0\u0026shape=0",
+                                             "name":  "probe63"
+                                         }
+                                     ]
+                     },
+                     {
+                         "source":  "bars",
+                         "start":  0,
+                         "end":  2000,
+                         "effects":  [
+                                         {
+                                             "id":  64,
+                                             "data":  "enabled=value%3D1%26userdata%3D0%26keys%3D0\u0026horizontal=value%3D0.000000%26userdata%3D0%26keys%3D0\u0026vertical=value%3D0.000000%26userdata%3D0%26keys%3D0",
+                                             "name":  "probe64"
+                                         }
+                                     ]
+                     },
+                     {
+                         "source":  "bars",
+                         "start":  0,
+                         "end":  2000,
+                         "effects":  [
+                                         {
+                                             "id":  68,
+                                             "data":  "x=value%3D0.000000%26userdata%3D0%26keys%3D0\u0026y=value%3D0.000000%26userdata%3D0%26keys%3D0\u0026ra=value%3D50.000000%26userdata%3D0%26keys%3D0\u0026s=value%3D1.000000%26userdata%3D0%26keys%3D0\u0026r=value%3D0.000000%26userdata%3D0%26keys%3D0\u0026g=value%3D0.000000%26userdata%3D0%26keys%3D0\u0026b=value%3D0.000000%26userdata%3D0%26keys%3D0\u0026rx=value%3D100.000000%26userdata%3D0%26keys%3D0\u0026ry=value%3D100.000000%26userdata%3D0%26keys%3D0\u0026o=value%3D1.000000%26userdata%3D0%26keys%3D0",
+                                             "name":  "probe68"
+                                         }
+                                     ]
+                     },
+                     {
+                         "source":  "bars",
+                         "start":  0,
+                         "end":  2000,
+                         "effects":  [
+                                         {
+                                             "id":  70,
+                                             "data":  "s=value%3D5.000000%26userdata%3D0%26keys%3D0\u0026a=value%3D0.000000%26userdata%3D0%26keys%3D0",
+                                             "name":  "probe70"
+                                         }
+                                     ]
+                     },
+                     {
+                         "source":  "bars",
+                         "start":  0,
+                         "end":  2000,
+                         "effects":  [
+                                         {
+                                             "id":  74,
+                                             "data":  "s=value%3D5.000000%26userdata%3D0%26keys%3D0",
+                                             "name":  "probe74"
+                                         }
+                                     ]
+                     },
+                     {
+                         "source":  "bars",
+                         "start":  0,
+                         "end":  2000,
+                         "effects":  [
+                                         {
+                                             "id":  75,
+                                             "data":  "s=value%3D5.000000%26userdata%3D0%26keys%3D0",
+                                             "name":  "probe75"
+                                         }
+                                     ]
+                     },
+                     {
+                         "source":  "bars",
+                         "start":  0,
+                         "end":  2000,
+                         "effects":  [
+                                         {
+                                             "id":  87,
+                                             "data":  "strength=value%3D3.000000%26userdata%3D0%26keys%3D0\u0026scale=value%3D1.000000%26userdata%3D0%26keys%3D0",
+                                             "name":  "probe87"
+                                         }
+                                     ]
+                     }
+                 ]
+}

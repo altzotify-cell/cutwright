@@ -1,0 +1,156 @@
+{
+  "$comment": "Function manifest for an agent loop. Each entry is one tool: `command` is a PowerShell template (apply Invoke-AgentStep.ps1 to it so the caller gets {ok, exitCode, stdout, stderr} back). `cost` and `needsApp` exist so the agent can budget: the app-free steps are seconds, the app steps are minutes. Paths are relative to the repo root. See docs/AGENT-RUNBOOK.md.",
+  "name": "videopad-pipeline",
+  "version": 4,
+  "root": "C:\\Users\\user\\Downloads\\videopad",
+  "runner": ".\\tools\\Invoke-AgentStep.ps1 -Step {step} -Command \"{command}\" -TimeoutSeconds {timeoutSeconds}",
+  "tools": [
+    {
+      "name": "videopad_gate",
+      "description": "Regression gate. Rebuilds every example spec and asserts byte-identical output. Needs no VideoPad. Run this before and after touching the writer, and after any spec edit; if it fails, the writer or a committed example changed and nothing downstream is trustworthy.",
+      "command": ".\\tools\\Test-Examples.ps1{specArgs} | Select-Object Spec,Output,Result | ConvertTo-Json -Compress",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "specs": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Optional subset of spec files to check, e.g. [\"cut5-cadence.json\"]. Omit to check all."
+          },
+          "specArgs": {
+            "type": "string",
+            "description": "Derived, not model-supplied: built from specs as ' -Spec a.json,b.json'."
+          }
+        }
+      },
+      "cost": "2-8 s",
+      "needsApp": false,
+      "returns": "JSON array of {Spec, Output, Result}; Result is 'identical' or 'changed'.",
+      "okMeans": "Every spec reproduced its .vpj byte for byte."
+    },
+    {
+      "name": "videopad_build",
+      "description": "Compile a JSON edit spec into a .vpj project. Deterministic and app-free. Rejects bad specs with exit 1 and a one-line reason on stderr: unknown effect name, out beyond the media at that speed, speed <= 0, overlapping or oversize fades, missing source, output file locked.",
+      "command": ".\\tools\\New-Project.ps1 -Spec \"{spec}\" | ConvertTo-Json -Depth 5 -Compress",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "spec": {
+            "type": "string",
+            "description": "Path to the spec JSON, e.g. \"examples/cut5-cadence.json\". Relative paths inside the spec resolve against the spec's own folder."
+          }
+        },
+        "required": ["spec"]
+      },
+      "cost": "<1 s",
+      "needsApp": false,
+      "returns": "{Output, DurationMs, Segments[]} where each segment reports StartMs/EndMs/LengthMs/Speed/InMs/OutMs/FadeInMs/FadeOutMs/Flip/AudioGainDb/AudioFadeInMs/AudioFadeOutMs/OffsetMs/Mute/Effects/AudioEffects/VideoHandle/AudioHandle/ReusedPair. AudioEffectCount is reported alongside EffectCount.",
+      "okMeans": "The .vpj was written; DurationMs is what the app will show."
+    },
+    {
+      "name": "videopad_diff",
+      "description": "Field-level diff of two .vpj files, records matched by handle, dataN blobs decoded before comparing. Use it to prove a round-trip was clean, or to see exactly what the app rewrote. Expect thumb/thumbpos to differ on a round-trip: the app zeroes its thumbnail cache.",
+      "command": ".\\tools\\Compare-Vpj.ps1 -A \"{a}\" -B \"{b}\"",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "a": { "type": "string", "description": "Left file, normally what the writer produced." },
+          "b": { "type": "string", "description": "Right file, normally the autosave capture." }
+        },
+        "required": ["a", "b"]
+      },
+      "cost": "<1 s",
+      "needsApp": false,
+      "returns": "Text lines '  <record> <field> 'old' -> 'new'' and a count, or 'no differences'.",
+      "okMeans": "Exit 0 even when there are differences: this is a report, not a check. The caller decides what differences are acceptable."
+    },
+    {
+      "name": "videopad_load",
+      "description": "Open a .vpj in VideoPad unattended, answering the expected 'Damaged File / Try Load' checksum prompt automatically. Closes any running instance first (VideoPad is single-instance and silently drops the file argument otherwise). Never force-kills.",
+      "command": ".\\tools\\Open-Project.ps1 -ProjectPath \"{project}\" -TimeoutSeconds {timeoutSeconds} | ConvertTo-Json -Compress",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "project": { "type": "string", "description": "Full or repo-relative path to the .vpj." },
+          "timeoutSeconds": { "type": "integer", "default": 40, "minimum": 10, "description": "How long to wait for the project title to appear." }
+        },
+        "required": ["project"]
+      },
+      "cost": "5-10 s",
+      "needsApp": true,
+      "returns": "{Loaded, Title, PromptDismissed, PromptCount, Modals, ElapsedSeconds, Message}.",
+      "okMeans": "Loaded=true, i.e. a title matching the project appeared and no prompt is still waiting."
+    },
+    {
+      "name": "videopad_roundtrip",
+      "description": "Load a project, wait for VideoPad to rewrite its autosave file, then diff the capture. The capture is the app's own serialisation of what its parser absorbed - the cheapest proof that a written field was understood. Takes one autosave period (~100 s), so it is the slow way to answer a question the gate cannot.",
+      "command": "Remove-Item \"{capture}\" -Force -ErrorAction SilentlyContinue; .\\tools\\Watch-Autosave.ps1 -Project \"{project}\" -LogPath \"{logPath}\" -TimeoutSeconds {timeoutSeconds}; .\\tools\\Compare-Vpj.ps1 -A \"{project}\" -B \"{capture}\"",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "project": { "type": "string", "description": "Path to the .vpj to load." },
+          "logPath": { "type": "string", "description": "Log to write, e.g. \"out/oracle/cut6.log\". The capture lands beside it as <name>.roundtrip.vpj." },
+          "capture": { "type": "string", "description": "Derived from logPath by replacing the extension with '.roundtrip.vpj'." },
+          "timeoutSeconds": { "type": "integer", "default": 240, "minimum": 120 }
+        },
+        "required": ["project", "logPath"]
+      },
+      "cost": "100-130 s",
+      "needsApp": true,
+      "returns": "The diff text (see videopad_diff) plus a log whose RESULT line says CAPTURED or TIMEOUT.",
+      "okMeans": "CAPTURED and a diff showing only thumbnail fields, or only changes you can explain."
+    },
+    {
+      "name": "videopad_export",
+      "description": "Render the open sequence to a video file, unattended, and check the duration. The export dialog is driven by real window messages; the output file is discovered rather than named, then moved to outputPath. Budget roughly twice the sequence duration plus half a minute.",
+      "command": ".\\tools\\Export-Project.ps1 -OutputPath \"{outputPath}\" -ProjectPath \"{project}\" -ExpectedDurationMs {expectedDurationMs} -TimeoutSeconds {timeoutSeconds} | ConvertTo-Json -Compress",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "outputPath": { "type": "string", "description": "Where the finished .mp4 goes; parent folder is created." },
+          "project": { "type": "string", "description": "Optional .vpj to open first. Omit to export whatever is already open." },
+          "expectedDurationMs": { "type": "integer", "default": 0, "description": "Expected duration in ms; the tool warns past one 24 fps frame. Take it from videopad_build's DurationMs." },
+          "timeoutSeconds": { "type": "integer", "default": 1800, "minimum": 120 }
+        },
+        "required": ["outputPath"]
+      },
+      "cost": "~2x sequence duration + 30 s",
+      "needsApp": true,
+      "returns": "{OutputPath, SizeBytes, DurationSeconds, DurationMs, ExpectedDurationMs, DurationDeltaMs, SourceFile, Verified, Message}.",
+      "okMeans": "A readable file exists at outputPath with the expected duration, so Verified=true."
+    },
+    {
+      "name": "videopad_step",
+      "description": "Escape hatch: run any other command (an out/oracle verify script, ffmpeg, git) and get the same JSON envelope back. Use it for the frame-MAE checks in out/oracle/, which are the only way to prove that a *rendered* frame says what the spec intended.",
+      "command": "{command}",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "command": { "type": "string", "description": "A PowerShell command line, run from the repo root." },
+          "timeoutSeconds": { "type": "integer", "default": 600 }
+        },
+        "required": ["command"]
+      },
+      "cost": "varies",
+      "needsApp": false,
+      "returns": "Whatever the step prints, plus {ok, exitCode, seconds, stdout, stderr} from the runner.",
+      "okMeans": "The step exited 0."
+    }
+  ],
+  "loop": [
+    "videopad_gate",
+    "videopad_build",
+    "videopad_load",
+    "videopad_roundtrip (only when a field's meaning is in doubt)",
+    "videopad_export",
+    "videopad_step (frame MAE, only when the claim is about pixels)"
+  ],
+  "invariants": [
+    "The gate is the only oracle that needs no app; never spend an app step on a question it can answer.",
+    "A .vpj is never hand-edited: unknown fields are preserved only when the writer does the edit.",
+    "The checksum is never repaired; 'Damaged File / Try Load' is the expected path.",
+    "VideoPad is closed with WM_CLOSE, never killed.",
+    "No verification claim without naming the oracle: gate, round-trip diff, or frame MAE."
+  ]
+}
+

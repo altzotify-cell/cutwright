@@ -1,0 +1,31 @@
+{
+    "template": "probe.vpj",
+    "output": "../out/cut15-pixelate.vpj",
+    "sequenceName": "Pixelate Test",
+    "media": [
+        { "id": "bars", "path": "../out/testmedia/bars.mp4" }
+    ],
+    "segments": [
+        { "source": "bars", "start": 0, "end": 2000 },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "pixelate", "params": { "value": 1 } } ]
+        },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "pixelate", "params": { "value": 2 } } ]
+        },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "pixelate", "params": { "value": 6 } } ]
+        },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "pixelate", "params": { "value": 20 } } ]
+        },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "pixelate", "params": { "value": 100 } } ]
+        }
+    ]
+}

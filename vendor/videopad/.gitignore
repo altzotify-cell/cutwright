@@ -1,0 +1,29 @@
+# Rendered output is not source. The two v2 exports are 170 MB, which exceeds
+# GitHub's 100 MB per-file hard limit, and the v3/v4 exports are just as
+# reproducible. Their SHA256 is recorded in docs/HANDOFF.md §8:
+#   agent-cut-v2.mp4 / agent-cut-first-export.mp4
+#   FDCA15802A463E3E7D0BF63AFF595E2E76013E8B6D7353891E48D31FB13CB16D
+# The double star also covers exports staged under out/oracle/*/ (the v4 probes).
+out/*.mp4
+out/**/*.mp4
+
+# VideoPad installer binaries and the registration backup: not part of the project
+*.exe
+reg_backup_registration.reg
+
+# Scratch frame dumps used for the MAE content checks
+out/frames/
+*.gray
+
+# Run logs (Watch-Autosave / Export-Project scratch output). The round-trip .vpj
+# dumps kept as evidence are tracked; only the .log chatter is ignored.
+logs/*.log
+
+# Scratch media synthesised with ffmpeg for the "add media" example (see
+# docs/HANDOFF.md); it is regenerated on demand, not checked in
+out/testmedia/
+
+# OS cruft
+Thumbs.db
+desktop.ini
+.DS_Store

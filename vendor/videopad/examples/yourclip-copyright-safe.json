@@ -1,0 +1,18 @@
+{
+    "template": "probe.vpj",
+    "output": "../out/yourclip-copyright-safe.vpj",
+    "sequenceName": "Copyright Safe Tokyo Ghoul Recap",
+    "media": [
+        { "id": "yourclip", "path": "../out/testmedia/yourclip.mp4" }
+    ],
+    "segments": [
+        { "source": "yourclip", "start": 0, "end": 32000 },
+        { "source": "yourclip", "start": 32000, "end": 64000, "fadeIn": 150, "fadeOut": 150, "effects": [ { "name": "mirror" } ] },
+        { "source": "yourclip", "start": 64000, "end": 96000, "fadeIn": 150, "fadeOut": 150, "effects": [ { "name": "flip", "params": { "horzflip": 1 } } ] },
+        { "source": "yourclip", "start": 96000, "end": 128000, "fadeIn": 150, "fadeOut": 150, "effects": [ { "name": "mirror", "params": { "mirrordirection": "vertical" } } ] },
+        { "source": "yourclip", "start": 128000, "end": 160000, "fadeIn": 150, "fadeOut": 150 },
+        { "source": "yourclip", "start": 160000, "end": 192000, "fadeIn": 150, "fadeOut": 150, "effects": [ { "name": "blur", "params": { "intensity": 60 } } ] },
+        { "source": "yourclip", "start": 192000, "end": 224000, "fadeIn": 150, "fadeOut": 150 },
+        { "source": "yourclip", "start": 224000, "end": 258500, "fadeIn": 150, "fadeOut": 250 }
+    ]
+}

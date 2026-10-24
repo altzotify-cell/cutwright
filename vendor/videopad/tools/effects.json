@@ -1,0 +1,311 @@
+{
+    "$comment":  "VideoPad video-effect registry used by New-Project.ps1. The top-level key is the stable name an agent writes in a spec; 'id' is VideoPad's internal effect id. 'defaults' and 'presets' are the raw effect Value blobs from HKCU:\\Software\\NCH Software\\VideoPad\\EffectPresets\\<id>\\<preset>\\Value. New-Project.ps1 rewrites the blob for -params and URL-escapes it into effectchains dataN. params[].wrap=true means the blob stores a keyframe-style value (value=..%26userdata=0%26keys=0); wrap=false means a plain scalar.",
+    "version":  1,
+    "verifiedAgainst":  "VideoPad Professional 8.91 (32-bit)",
+    "effects":  {
+        "amplify": {
+            "id": 1001,
+            "label": "Amplify",
+            "category": "audio",
+            "summary": "Audio gain as VideoPad stores it: 100 = unity and the level falls 0.4816 dB per unit, so this is a dB control (value = 100 + 2.0761 * dB), not a percentage. Written to the *audio* record's chain. A spec normally sets the segment key \"audioGainDb\" and lets the writer do that arithmetic.",
+            "anonymous": false,
+            "params": [
+                { "key": "amplify", "type": "float", "wrap": true, "default": 100, "min": 0, "max": 400 }
+            ],
+            "defaults": "amplify=value%3D100.000000%26userdata%3D0%26keys%3D0",
+            "presets": {}
+        },
+        "mirror": {
+            "id": 36,
+            "label": "Mirror",
+            "category": "geometry",
+            "summary": "Mirrors the frame around its centre axis; the cheapest way to make footage read as a different shot.",
+            "anonymous": false,
+            "params": [
+                { "key": "enabled", "type": "bool", "wrap": true, "default": 1 },
+                { "key": "mirrordirection", "type": "enum", "wrap": false, "default": "horizontal", "values": { "horizontal": 0, "vertical": 1 } }
+            ],
+            "defaults": "enabled=value%3D1%26userdata%3D0%26keys%3D0&mirrordirection=0",
+            "presets": {}
+        },
+        "flip": {
+            "id": 69,
+            "label": "Flip",
+            "category": "geometry",
+            "summary": "Independent horizontal and vertical flips; same family as mirror but the two axes toggle separately. horzflip=1 is a left-right swap (lateral inversion), which is what a spec's segment-level \"flip\": \"horizontal\" writes.",
+            "anonymous": false,
+            "params": [
+                { "key": "horzflip", "type": "bool", "wrap": true, "default": 0 },
+                { "key": "vertflip", "type": "bool", "wrap": true, "default": 0 }
+            ],
+            "defaults": "horzflip=value%3D0%26userdata%3D0%26keys%3D0&vertflip=value%3D0%26userdata%3D0%26keys%3D0",
+            "presets": {}
+        },
+        "rotate": {
+            "id": 33,
+            "label": "Rotate",
+            "category": "geometry",
+            "summary": "Rotates the frame on three axes. 'z' is the in-plane rotation a caller usually wants; x and y tumble the image in 3D.",
+            "anonymous": false,
+            "params": [
+                { "key": "x", "type": "float", "wrap": true, "default": 0, "min": -360, "max": 360 },
+                { "key": "y", "type": "float", "wrap": true, "default": 0, "min": -360, "max": 360 },
+                { "key": "z", "type": "float", "wrap": true, "default": 0, "min": -360, "max": 360 }
+            ],
+            "defaults": "x=value%3D0.000000%26userdata%3D0%26keys%3D0&y=value%3D0.000000%26userdata%3D0%26keys%3D0&z=value%3D0.000000%26userdata%3D0%26keys%3D0",
+            "presets": {
+                "Rotate 90 Degrees": "x=value%3D360.000000%26userdata%3D0%26keys%3D0&y=value%3D360.000000%26userdata%3D0%26keys%3D0&z=value%3D90.000000%26userdata%3D0%26keys%3D0",
+                "Rotate 180 Degrees": "x=value%3D360.000000%26userdata%3D0%26keys%3D0&y=value%3D360.000000%26userdata%3D0%26keys%3D0&z=value%3D180.000000%26userdata%3D0%26keys%3D0",
+                "Rotate 270 Degrees": "x=value%3D360.000000%26userdata%3D0%26keys%3D0&y=value%3D360.000000%26userdata%3D0%26keys%3D0&z=value%3D270.000000%26userdata%3D0%26keys%3D0"
+            }
+        },
+        "scale": {
+            "id": 34,
+            "label": "Crop / Scale",
+            "category": "geometry",
+            "summary": "Scales the frame about an origin. x/y below 1 crops the edges away (digital zoom), above 1 letterboxes; lockaspect ties the two axes.",
+            "anonymous": false,
+            "params": [
+                { "key": "x", "type": "float", "wrap": true, "default": 1, "min": 0, "max": 10 },
+                { "key": "y", "type": "float", "wrap": true, "default": 1, "min": 0, "max": 10 },
+                { "key": "lockaspect", "type": "int", "wrap": false, "default": 1, "values": { "off": 0, "on": 1 } },
+                { "key": "originx", "type": "float", "wrap": true, "default": 0, "min": -1, "max": 1 },
+                { "key": "originy", "type": "float", "wrap": true, "default": 0, "min": -1, "max": 1 },
+                { "key": "offsetx", "type": "float", "wrap": true, "default": 0, "min": -1, "max": 1 },
+                { "key": "offsety", "type": "float", "wrap": true, "default": 0, "min": -1, "max": 1 }
+            ],
+            "defaults": "x=value%3D1.000000%26userdata%3D0%26keys%3D0&y=value%3D1.000000%26userdata%3D0%26keys%3D0&lockaspect=1&originx=value%3D0.000000%26userdata%3D0%26keys%3D0&originy=value%3D0.000000%26userdata%3D0%26keys%3D0&offsetx=value%3D0.000000%26userdata%3D0%26keys%3D0&offsety=value%3D0.000000%26userdata%3D0%26keys%3D0",
+            "presets": {
+                "Quarter Screen": "x=value%3D0.500000%26userdata%3D0%26keys%3D0&y=value%3D0.500000%26userdata%3D0%26keys%3D0&lockaspect=0&originx=value%3D0.000000%26userdata%3D0%26keys%3D0&originy=value%3D0.000000%26userdata%3D0%26keys%3D0&offsetx=value%3D0.000000%26userdata%3D0%26keys%3D0&offsety=value%3D0.000000%26userdata%3D0%26keys%3D0",
+                "16:9 to 4:3": "x=value%3D0.750000%26userdata%3D0%26keys%3D0&y=value%3D1.000000%26userdata%3D0%26keys%3D0&lockaspect=0&originx=value%3D0.000000%26userdata%3D0%26keys%3D0&originy=value%3D0.000000%26userdata%3D0%26keys%3D0&offsetx=value%3D0.000000%26userdata%3D0%26keys%3D0&offsety=value%3D0.000000%26userdata%3D0%26keys%3D0",
+                "4:3 to 16:9": "x=value%3D1.340000%26userdata%3D0%26keys%3D0&y=value%3D1.000000%26userdata%3D0%26keys%3D0&lockaspect=0&originx=value%3D0.000000%26userdata%3D0%26keys%3D0&originy=value%3D0.000000%26userdata%3D0%26keys%3D0&offsetx=value%3D0.000000%26userdata%3D0%26keys%3D0&offsety=value%3D0.000000%26userdata%3D0%26keys%3D0"
+            }
+        },
+        "crop": {
+            "id": 17,
+            "label": "Crop",
+            "category": "geometry",
+            "summary": "Keeps the rectangle between (x1,y1) and (x2,y2) and stretches it back to full frame; coordinates are percentages of the source frame.",
+            "anonymous": false,
+            "params": [
+                { "key": "x1", "type": "float", "wrap": true, "default": 0, "min": 0, "max": 100 },
+                { "key": "y1", "type": "float", "wrap": true, "default": 0, "min": 0, "max": 100 },
+                { "key": "x2", "type": "float", "wrap": true, "default": 100, "min": 0, "max": 100 },
+                { "key": "y2", "type": "float", "wrap": true, "default": 100, "min": 0, "max": 100 },
+                { "key": "restraint2", "type": "int", "wrap": false, "default": 0 }
+            ],
+            "defaults": "x1=value%3D0.000000%26userdata%3D0%26keys%3D0&y1=value%3D0.000000%26userdata%3D0%26keys%3D0&x2=value%3D100.000000%26userdata%3D0%26keys%3D0&y2=value%3D100.000000%26userdata%3D0%26keys%3D0&restraint2=0",
+            "presets": {
+                "Centre Half": "x1=value%3D25.000000%26userdata%3D0%26keys%3D0&y1=value%3D25.000000%26userdata%3D0%26keys%3D0&x2=value%3D75.000000%26userdata%3D0%26keys%3D0&y2=value%3D75.000000%26userdata%3D0%26keys%3D0&restraint2=0"
+            }
+        },
+        "colorAdjust": {
+            "id": 6,
+            "label": "Brightness / Contrast / Gamma",
+            "category": "colour",
+            "summary": "The three luma controls in one effect. brightness is on VideoPad's 0-255 scale where 128 is neutral, contrast 0-100 and gamma 0.1-10.",
+            "anonymous": false,
+            "params": [
+                { "key": "brightness", "type": "float", "wrap": true, "default": 128, "min": 0, "max": 255 },
+                { "key": "contrast", "type": "float", "wrap": true, "default": 25, "min": 0, "max": 100 },
+                { "key": "gamma", "type": "float", "wrap": true, "default": 1, "min": 0.1, "max": 10 }
+            ],
+            "defaults": "brightness=value%3D128.000000%26userdata%3D0%26keys%3D0&contrast=value%3D25.000000%26userdata%3D0%26keys%3D0&gamma=value%3D1.000000%26userdata%3D0%26keys%3D0",
+            "presets": {
+                "Bright": "brightness=value%3D50.000000%26userdata%3D0%26keys%3D0&contrast=value%3D75.000000%26userdata%3D0%26keys%3D0&gamma=value%3D3.140000%26userdata%3D0%26keys%3D0",
+                "Dark": "brightness=value%3D-75.000000%26userdata%3D0%26keys%3D0&contrast=value%3D10.000000%26userdata%3D0%26keys%3D0&gamma=value%3D1.200000%26userdata%3D0%26keys%3D0"
+            }
+        },
+        "saturation": {
+            "id": 24,
+            "label": "Saturation",
+            "category": "colour",
+            "summary": "Single-slider saturation, -100..100. Measured on out/cut14-colour.mp4 against an untreated frame of the same source (mean chroma 246.5 of 255, luma 125.3): -100 is exactly grey - chroma 0.1, with luma unchanged at 125.1, so it desaturates without touching brightness; 0 is the identity - chroma 246.5 and hue 170, spot on the untreated frame; positive values add saturation, but the test pattern is already near the ceiling, so the default 25 measures 247.9 and 100 only 251.3 (about +2 percent). Treat 0 as \"no change\", not as \"no saturation\": only -100 removes colour.",
+            "anonymous": true,
+            "params": [
+                { "key": "value", "type": "float", "wrap": true, "default": 25, "min": -100, "max": 100 }
+            ],
+            "identity": { "value": 0 },
+            "defaults": "value=25.000000&userdata=0&keys=0",
+            "presets": {
+                "Completely Unsaturated": "value=-100.000000&userdata=0&keys=0",
+                "Less Saturated": "value=-12.500000&userdata=0&keys=0",
+                "Saturated": "value=17.260000&userdata=0&keys=0",
+                "More Saturated": "value=54.260000&userdata=0&keys=0",
+                "Completely Saturated": "value=100.000000&userdata=0&keys=0"
+            }
+        },
+        "temperature": {
+            "id": 26,
+            "label": "Colour Temperature",
+            "category": "colour",
+            "summary": "Warm/cool tint, -128..128. Measured on out/cut14-colour.mp4 by mean red minus mean blue against an untreated frame (-3.6): 0 is the identity (-3.6, hue 170), the blob VideoPad ships as default is 64 and is already warm (R-B +56.2, dominant hue 53 deg - orange), -128 is the coolest (-120.3, and luma drops 9 to 116.3, so it is bluer *and* slightly darker) and +128 the warmest (+116.1). Neutral has to be asked for: preset Normal, or value 0.",
+            "anonymous": true,
+            "params": [
+                { "key": "value", "type": "float", "wrap": true, "default": 64, "min": -128, "max": 128 }
+            ],
+            "identity": { "value": 0 },
+            "defaults": "value=64.000000&userdata=0&keys=0",
+            "presets": {
+                "Normal": "value=0.000000&userdata=0&keys=0",
+                "Cool": "value=-32.000000&userdata=0&keys=0",
+                "Cooler": "value=-96.000000&userdata=0&keys=0",
+                "Coolest": "value=-128.000000&userdata=0&keys=0",
+                "Warm": "value=32.000000&userdata=0&keys=0",
+                "Warmer": "value=96.000000&userdata=0&keys=0",
+                "Warmest": "value=128.000000&userdata=0&keys=0"
+            }
+        },
+        "hue": {
+            "id": 25,
+            "label": "Hue",
+            "category": "colour",
+            "summary": "Rotates hue in degrees around the colour wheel, 0..360. Measured on out/cut14-colour.mp4 with a circular mean hue over every pixel that has chroma (control: 170 deg): 0 is the identity - 170 deg, chroma 246.4, indistinguishable from no effect - while the blob VideoPad ships as the default is 90 and measures 273 deg, i.e. about a quarter turn, so \"leave the colours alone\" must be said explicitly (preset Normal or value 0). 180 lands on 347 deg, the complement. Rotation costs chroma rather than preserving it (246 control, 183 at 90, 123 at 180) because a rotated colour that leaves the gamut is clipped, which is why a hue test can look like a saturation drop.",
+            "anonymous": true,
+            "params": [
+                { "key": "value", "type": "float", "wrap": true, "default": 90, "min": 0, "max": 360 }
+            ],
+            "identity": { "value": 0 },
+            "defaults": "value=90.000000&userdata=0&keys=0",
+            "presets": {
+                "Normal": "value=0.000000&userdata=0&keys=0",
+                "Half Way": "value=190.000000&userdata=0&keys=0"
+            }
+        },
+        "fade": {
+            "id": 28,
+            "label": "Fade",
+            "category": "colour",
+            "summary": "Opacity against black, 0-100. VideoPad ships the effect at 50 (half transparent); the Fade In / Fade Out presets are keyframed ramps across the whole clip.",
+            "anonymous": true,
+            "params": [
+                { "key": "value", "type": "float", "wrap": true, "default": 50, "min": 0, "max": 100 }
+            ],
+            "defaults": "value=50.000000&userdata=0&keys=0",
+            "presets": {
+                "Fade In": "value=50.000000&userdata=0&keys=2&position0=0.000000&value0=0.000000&userdata0=0&prevcpposition0=0.000000&prevcpvalue0=0.000000&nextcpposition0=0.000000&nextcpvalue0=0.000000&position1=1.000000&value1=100.000000&userdata1=0&prevcpposition1=0.000000&prevcpvalue1=0.000000&nextcpposition1=0.000000&nextcpvalue1=0.000000",
+                "Fade Out": "value=0.000000&userdata=0&keys=2&position0=0.000000&value0=100.000000&userdata0=0&prevcpposition0=0.000000&prevcpvalue0=0.000000&nextcpposition0=0.000000&nextcpvalue0=0.000000&position1=1.000000&value1=0.000000&userdata1=0&prevcpposition1=0.000000&prevcpvalue1=0.000000&nextcpposition1=0.000000&nextcpvalue1=0.000000"
+            }
+        },
+        "pixelate": {
+            "id": 15,
+            "label": "Pixelate",
+            "category": "style",
+            "summary": "Mosaic/pixelation, block size 1..100 - and the number is a size in effect, not literal pixels. Measured on out/cut15-pixelate.mp4 against the untreated frame of the same source (mean Laplacian detail 1.383, 14 811 distinct colours, mean run of identical pixels along the middle row 2.2): the run grows 2.4 at value 2, 4.3 at 6, 14.5 at 20 and 213.3 at 100 (about a third of the 640 px frame, so it saturates there), while distinct colours collapse 17 954 -> 6 868 -> 800 -> 5 and detail falls 0.861 -> 0.594 -> 0.426 -> 0.018. Value 1 is NOT a no-op: it measures detail 0.951, 17 745 colours and MAE 2.52, a mild resampling blur that even adds intermediate colours, so this effect has no measured identity and asks for its block size explicitly.",
+            "anonymous": true,
+            "params": [
+                { "key": "value", "type": "float", "wrap": true, "default": 5, "min": 1, "max": 100 }
+            ],
+            "defaults": "value=5.000000&userdata=0&keys=0",
+            "presets": {
+                "Minor Pixelation": "value=2.000000&userdata=0&keys=0",
+                "Moderate Pixelation": "value=6.000000&userdata=0&keys=0",
+                "Major Pixelation": "value=20.000000&userdata=0&keys=0"
+            }
+        },
+        "noise": {
+            "id": 5,
+            "label": "Noise",
+            "category": "style",
+            "summary": "Adds film-grain style noise; intensity 0-100, saturation 0-100, coverage 0-100.",
+            "anonymous": false,
+            "params": [
+                { "key": "intensity", "type": "float", "wrap": true, "default": 25, "min": 0, "max": 100 },
+                { "key": "saturation", "type": "float", "wrap": true, "default": 0, "min": 0, "max": 100 },
+                { "key": "coverage", "type": "float", "wrap": true, "default": 100, "min": 0, "max": 100 }
+            ],
+            "defaults": "intensity=value%3D25.000000%26userdata%3D0%26keys%3D0&saturation=value%3D0.000000%26userdata%3D0%26keys%3D0&coverage=value%3D100.000000%26userdata%3D0%26keys%3D0",
+            "presets": {}
+        },
+        "oldFilm": {
+            "id": 4,
+            "label": "Old Film",
+            "category": "style",
+            "summary": "Analog-film damage: gate shake, brightness flicker, dust spots, vertical scratches and monochrome. Every toggle is a 0/1 flag.",
+            "anonymous": false,
+            "params": [
+                { "key": "enable", "type": "bool", "wrap": true, "default": 1 },
+                { "key": "shake", "type": "bool", "wrap": true, "default": 1 },
+                { "key": "flicker", "type": "bool", "wrap": true, "default": 1 },
+                { "key": "spots", "type": "bool", "wrap": true, "default": 1 },
+                { "key": "lines", "type": "bool", "wrap": true, "default": 1 },
+                { "key": "monochrome", "type": "bool", "wrap": true, "default": 1 }
+            ],
+            "defaults": "enable=value%3D1%26userdata%3D0%26keys%3D0&shake=value%3D1%26userdata%3D0%26keys%3D0&flicker=value%3D1%26userdata%3D0%26keys%3D0&spots=value%3D1%26userdata%3D0%26keys%3D0&lines=value%3D1%26userdata%3D0%26keys%3D0&monochrome=value%3D1%26userdata%3D0%26keys%3D0",
+            "presets": {}
+        },
+        "blur": {
+            "id": 11,
+            "label": "Blur",
+            "category": "style",
+            "summary": "Gaussian blur; intensity 0-100.",
+            "anonymous": false,
+            "params": [
+                { "key": "enabled", "type": "bool", "wrap": true, "default": 1 },
+                { "key": "intensity", "type": "float", "wrap": true, "default": 50, "min": 0, "max": 100 }
+            ],
+            "defaults": "enabled=value%3D1%26userdata%3D0%26keys%3D0&intensity=value%3D50.000000%26userdata%3D0%26keys%3D0",
+            "presets": {}
+        },
+        "border": {
+            "id": 82,
+            "label": "Border",
+            "category": "style",
+            "summary": "Draws a coloured frame around the picture. wa is the border width in pixels and c0-c5 are the per-edge colour channels; the shipped default is a red frame.",
+            "anonymous": false,
+            "params": [
+                { "key": "pf", "type": "int", "wrap": false, "default": 5 },
+                { "key": "lt", "type": "int", "wrap": false, "default": 3000 },
+                { "key": "r", "type": "float", "wrap": true, "default": 255, "min": 0, "max": 255 },
+                { "key": "g", "type": "float", "wrap": true, "default": 0, "min": 0, "max": 255 },
+                { "key": "b", "type": "float", "wrap": true, "default": 0, "min": 0, "max": 255 },
+                { "key": "wa", "type": "float", "wrap": true, "default": 4, "min": 0, "max": 500 },
+                { "key": "wf", "type": "float", "wrap": true, "default": 1, "min": 0, "max": 10 },
+                { "key": "ftb", "type": "int", "wrap": false, "default": 0 },
+                { "key": "scale", "type": "float", "wrap": true, "default": 1, "min": 0, "max": 10 },
+                { "key": "opacity", "type": "float", "wrap": true, "default": 0.9, "min": 0, "max": 1 },
+                { "key": "c0", "type": "int", "wrap": false, "default": 255 },
+                { "key": "c1", "type": "int", "wrap": false, "default": 255 },
+                { "key": "c2", "type": "int", "wrap": false, "default": 255 },
+                { "key": "c3", "type": "int", "wrap": false, "default": 255 },
+                { "key": "c4", "type": "int", "wrap": false, "default": 255 },
+                { "key": "c5", "type": "int", "wrap": false, "default": 255 },
+                { "key": "usedefaultcolor", "type": "int", "wrap": false, "default": 1 }
+            ],
+            "defaults": "pf=5&lt=3000&r=value%3D255.000000%26userdata%3D0%26keys%3D0&g=value%3D0.000000%26userdata%3D0%26keys%3D0&b=value%3D0.000000%26userdata%3D0%26keys%3D0&wa=value%3D4.000000%26userdata%3D0%26keys%3D0&wf=value%3D1.000000%26userdata%3D0%26keys%3D0&ftb=0&scale=value%3D1.000000%26userdata%3D0%26keys%3D0&opacity=value%3D0.900000%26userdata%3D0%26keys%3D0&c0=255&c1=255&c2=255&c3=255&c4=255&c5=255&usedefaultcolor=1",
+            "presets": {}
+        },
+        "cartoon": {
+            "id": 41,
+            "label": "Cartoon",
+            "category": "style",
+            "summary": "Posterises the frame into flat colour bands and draws dark lines along the edges - the 'comic book' look. Measured on out/cut10-cartoon.mp4: cc is how many colour levels survive (cc=2 leaves 119 distinct luma levels and MAE 65.3 against the untreated frame; cc=64 leaves 198 and MAE 10.6, so low cc = flatter). et is edge sensitivity: the count of strong-gradient pixels runs 1345 at et=0, 2835 at the default 58 and 8343 at et=100, i.e. higher et turns more of the picture into outline. br is outline brightness: at br=0 the outline pixels sit 49.2 luma below the frame mean (hard black lines), at the default 5 they sit 36.6 below, and at br=20 they are level with the picture (+0.9) so the lines stop reading as lines. Bounds are left unset because only the 0..100 (et) and 0..64 (cc) envelope has been exercised; values outside it are written as given.",
+            "anonymous": false,
+            "params": [
+                { "key": "cc", "type": "float", "wrap": true, "default": 11 },
+                { "key": "et", "type": "float", "wrap": true, "default": 58 },
+                { "key": "br", "type": "float", "wrap": true, "default": 5 }
+            ],
+            "defaults": "cc=value%3D11.000000%26userdata%3D0%26keys%3D0&et=value%3D58.000000%26userdata%3D0%26keys%3D0&br=value%3D5.000000%26userdata%3D0%26keys%3D0",
+            "presets": {}
+        },
+        "snow": {
+            "id": 84,
+            "label": "Snow",
+            "category": "overlay",
+            "summary": "Animated falling-snow overlay drawn over the picture. Measured on out/cut11-snow.mp4 (share of pixels that read as flakes): pf is the flake budget and scales the result close to linearly - pf=5 gives 0.07%, the default 25 gives 0.30%, pf=100 gives 1.12%. scale is flake size and changes coverage just as hard - 0.03% at 0.1, 1.07% at 2. opacity is how solid the flakes are, so at 0.3 no pixel is bright enough to count as snow at all. dv adds sideways drift (0.51% coverage at dv=1 versus 0.30% default, and more frame-to-frame motion). lt is a flake's lifetime in milliseconds; it barely moves a single sampled frame (0.22% at 500, 0.26% at 8000) but governs how long a flake survives, so it is what to change when the fall looks too steady. Unlike a colour filter this is time-based: two frames of the same still source differ once snow is on.",
+            "anonymous": false,
+            "params": [
+                { "key": "pf", "type": "int", "wrap": false, "default": 25 },
+                { "key": "lt", "type": "int", "wrap": false, "default": 2300 },
+                { "key": "scale", "type": "float", "wrap": true, "default": 0.5, "min": 0, "max": 10 },
+                { "key": "opacity", "type": "float", "wrap": true, "default": 1, "min": 0, "max": 1 },
+                { "key": "dv", "type": "float", "wrap": true, "default": 0.25 },
+                { "key": "f", "type": "float", "wrap": true, "default": 0 },
+                { "key": "g", "type": "float", "wrap": true, "default": 0 }
+            ],
+            "defaults": "pf=25&lt=2300&scale=value%3D0.500000%26userdata%3D0%26keys%3D0&opacity=value%3D1.000000%26userdata%3D0%26keys%3D0&dv=value%3D0.250000%26userdata%3D0%26keys%3D0&f=value%3D0.000000%26userdata%3D0%26keys%3D0&g=value%3D0.000000%26userdata%3D0%26keys%3D0",
+            "presets": {}
+        }
+    }
+}

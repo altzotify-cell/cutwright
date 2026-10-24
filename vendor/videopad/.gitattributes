@@ -1,0 +1,9 @@
+# .vpj files are format-critical: byte-exact, LF-terminated querystrings.
+# Never let git normalise line endings on them.
+*.vpj -text
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.mp4 binary
+*.exe binary

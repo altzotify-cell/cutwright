@@ -1,0 +1,39 @@
+{
+    "template": "probe.vpj",
+    "output": "../out/cut10-cartoon.vpj",
+    "sequenceName": "Cartoon Test",
+    "media": [
+        { "id": "bars", "path": "../out/testmedia/bars.mp4" }
+    ],
+    "segments": [
+        { "source": "bars", "start": 0, "end": 2000 },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "cartoon" } ]
+        },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "cartoon", "params": { "cc": 2 } } ]
+        },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "cartoon", "params": { "cc": 64 } } ]
+        },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "cartoon", "params": { "et": 0 } } ]
+        },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "cartoon", "params": { "et": 100 } } ]
+        },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "cartoon", "params": { "br": 0 } } ]
+        },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "cartoon", "params": { "br": 20 } } ]
+        }
+    ]
+}

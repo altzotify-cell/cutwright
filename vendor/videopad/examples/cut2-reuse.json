@@ -1,0 +1,12 @@
+{
+    "template":  "probe.vpj",
+    "output":  "../out/cut2-reuse.vpj",
+    "sequenceName":  "Reuse Test",
+    "segments":  [
+                     { "source":  1, "start":  0,      "end":  30000 },
+                     { "source":  0, "start":  600000, "end":  630000 },
+                     { "source":  1, "start":  900000, "end":  930000 },
+                     { "source":  1, "start":  1200000, "end":  1230000 },
+                     { "source":  0, "start":  100000, "end":  130000, "mute":  true }
+                 ]
+}

@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Recap Studio</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div id="app">
+    <aside id="sidebar">
+      <div class="brand">🎬 Recap&nbsp;Studio</div>
+      <button id="newProjectBtn" class="btn primary block">＋ New project</button>
+      <button id="keysBtn" class="btn block" style="margin-top:8px">🔑 API keys</button>
+      <a id="guideBtn" class="btn block" style="margin-top:8px;text-align:center;text-decoration:none;display:block" href="/guide" target="_blank">📖 Step-by-step guide</a>
+      <div id="runningBox" class="running hidden"></div>
+      <div id="projectList" class="project-list"></div>
+      <div id="toolsStatus" class="tools"></div>
+    </aside>
+
+    <main id="main">
+      <div id="emptyState" class="empty">
+        <h2>Welcome to Recap Studio</h2>
+        <p>Create a project or pick one on the left to start.</p>
+      </div>
+
+      <div id="projectView" class="hidden">
+        <header id="projectHeader">
+          <div>
+            <h1 id="projTitle">Project</h1>
+            <div id="projMeta" class="meta"></div>
+          </div>
+          <div class="header-actions">
+            <button id="openFolderBtn" class="btn ghost">📂 Open folder</button>
+          </div>
+        </header>
+
+        <nav id="tabs" class="tabs">
+          <button data-tab="dashboard" class="tab">Dashboard</button>
+          <button data-tab="pipeline" class="tab">Run steps</button>
+          <button data-tab="script" class="tab">Script</button>
+          <button data-tab="footage" class="tab">Footage</button>
+          <button data-tab="voice" class="tab">Voice</button>
+          <button data-tab="outputs" class="tab">Outputs</button>
+          <button data-tab="settings" class="tab">Settings</button>
+        </nav>
+
+        <div id="tabContent"></div>
+      </div>
+    </main>
+  </div>
+
+  <div id="consoleWrap" class="hidden">
+    <div id="consoleHeader">
+      <span id="consoleTitle">Step</span>
+      <span id="consoleStatus" class="console-status"></span>
+      <button id="consoleStop" class="btn danger small hidden">■ Stop</button>
+      <button id="consoleClose" class="btn ghost small" title="Hide this panel (the job keeps running)">✕</button>
+    </div>
+    <div id="consoleProgress" class="hidden">
+      <div class="pbar"><div id="pbarFill" class="pbar-fill"></div></div>
+      <div id="pinfo" class="pinfo"></div>
+    </div>
+    <pre id="consoleLog"></pre>
+  </div>
+
+  <div id="modal" class="hidden">
+    <div id="modalBox"></div>
+  </div>
+
+  <div id="toast" class="hidden"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

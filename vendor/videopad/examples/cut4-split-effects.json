@@ -1,0 +1,37 @@
+{
+    "template":  "probe.vpj",
+    "output":  "../out/cut4-split-effects.vpj",
+    "sequenceName":  "Split + Effect Test",
+    "media":  [
+                  { "id":  "bars", "path":  "../out/testmedia/bars.mp4" }
+              ],
+    "defaultEffects":  [
+                           { "name":  "saturation", "preset":  "Completely Unsaturated" }
+                       ],
+    "segments":  [
+                     {
+                         "source":  1,
+                         "start":   0,
+                         "end":     6000,
+                         "split":   [ 2000, 4000 ]
+                     },
+                     {
+                         "source":  "bars",
+                         "start":   0,
+                         "end":     6000,
+                         "split":   [ 3000 ],
+                         "effects": [
+                                        { "name":  "rotate", "params":  { "z":  90 } }
+                                    ]
+                     },
+                     {
+                         "source":  1,
+                         "start":   900000,
+                         "end":     903000,
+                         "effects": [
+                                        { "name":  "mirror", "params":  { "mirrordirection":  "vertical" } },
+                                        { "name":  "colorAdjust", "preset":  "Bright", "params":  { "contrast":  60 } }
+                                    ]
+                     }
+                 ]
+}

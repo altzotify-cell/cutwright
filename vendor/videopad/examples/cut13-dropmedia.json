@@ -1,0 +1,10 @@
+{
+    "template": "probe.vpj",
+    "output": "../out/cut13-dropmedia.vpj",
+    "sequenceName": "Pruned Bin",
+    "dropUnusedMedia": true,
+    "segments": [
+        { "source": 1, "start": 0, "end": 4000 },
+        { "source": 1, "start": 60000, "end": 64000, "mute": true }
+    ]
+}

@@ -1,0 +1,67 @@
+{
+    "template": "probe.vpj",
+    "output": "../out/cut14-colour.vpj",
+    "sequenceName": "Colour Test",
+    "media": [
+        { "id": "bars", "path": "../out/testmedia/bars.mp4" }
+    ],
+    "segments": [
+        { "source": "bars", "start": 0, "end": 2000 },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "saturation", "params": { "value": -100 } } ]
+        },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "saturation", "params": { "value": 0 } } ]
+        },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "saturation" } ]
+        },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "saturation", "params": { "value": 100 } } ]
+        },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "hue", "preset": "Normal" } ]
+        },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "hue" } ]
+        },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "hue", "params": { "value": 180 } } ]
+        },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "temperature", "preset": "Normal" } ]
+        },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "temperature", "params": { "value": -128 } } ]
+        },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "temperature" } ]
+        },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "temperature", "params": { "value": 128 } } ]
+        },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "saturation", "identity": true } ]
+        },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "hue", "identity": true } ]
+        },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "temperature", "identity": true } ]
+        }
+    ]
+}

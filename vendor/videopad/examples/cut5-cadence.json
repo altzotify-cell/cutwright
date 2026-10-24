@@ -1,0 +1,15 @@
+{
+    "template":  "probe.vpj",
+    "output":  "../out/cut5-cadence.vpj",
+    "sequenceName":  "Cadence Test",
+    "media":  [
+                  { "id":  "bars", "path":  "../out/testmedia/bars.mp4" }
+              ],
+    "segments":  [
+                     { "source":  "bars", "start":  0, "end":  6000, "speed":  2, "fadeIn":  250 },
+                     { "source":  "bars", "start":  1000, "end":  4000, "fadeOut":  500 },
+                     { "source":  "bars", "start":  0, "end":  3000, "speed":  0.5 },
+                     { "source":  "bars", "start":  3000, "end":  6000, "speed":  2, "fadeIn":  200, "fadeOut":  200,
+                       "effects":  [ { "name":  "mirror" } ] }
+                 ]
+}

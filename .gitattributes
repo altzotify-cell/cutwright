@@ -1,0 +1,18 @@
+# Cutwright writes byte-identical .mlt files and records their sha256, so line
+# endings have to stay put: every text file is stored and checked out as LF.
+* text=auto eol=lf
+
+*.mlt  text eol=lf
+*.py   text eol=lf
+*.json text eol=lf
+*.md   text eol=lf
+*.txt  text eol=lf
+*.bat  text eol=crlf
+*.ps1  text eol=crlf
+
+# Renders, frames and archives are opaque bytes.
+*.mp4  binary
+*.wav  binary
+*.png  binary
+*.zip  binary
+*.flac binary

@@ -1,0 +1,47 @@
+{
+    "template": "probe.vpj",
+    "output": "../out/cut11-snow.vpj",
+    "sequenceName": "Snow Test",
+    "media": [
+        { "id": "bars", "path": "../out/testmedia/bars.mp4" }
+    ],
+    "segments": [
+        { "source": "bars", "start": 0, "end": 2000 },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "snow" } ]
+        },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "snow", "params": { "pf": 5 } } ]
+        },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "snow", "params": { "pf": 100 } } ]
+        },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "snow", "params": { "scale": 0.1 } } ]
+        },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "snow", "params": { "scale": 2 } } ]
+        },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "snow", "params": { "opacity": 0.3 } } ]
+        },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "snow", "params": { "dv": 1 } } ]
+        },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "snow", "params": { "lt": 500 } } ]
+        },
+        {
+            "source": "bars", "start": 0, "end": 2000,
+            "effects": [ { "name": "snow", "params": { "lt": 8000 } } ]
+        }
+    ]
+}

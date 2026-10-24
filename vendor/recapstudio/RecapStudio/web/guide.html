@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recap Studio Guide</title>
+<style>
+  :root { --bg:#0e1116; --panel:#171b22; --panel2:#1e242e; --border:#2a323e; --text:#e6ebf2; --muted:#8b96a6;
+          --accent:#5b8cff; --green:#34c98e; --red:#ef5b6b; --amber:#f5b942; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 70px; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.65 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  nav { position:sticky; top:0; z-index:5; background:rgba(14,17,22,.95); backdrop-filter:blur(6px); border-bottom:1px solid var(--border);
+        padding:10px 16px; display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+  nav b { margin-right:8px; }
+  nav a { color:var(--muted); text-decoration:none; font-size:13px; padding:4px 10px; border:1px solid var(--border); border-radius:20px; }
+  nav a:hover { color:var(--text); border-color:var(--accent); }
+  main { max-width:860px; margin:0 auto; padding:24px 16px 80px; }
+  h1 { font-size:28px; margin:8px 0 6px; }
+  h2 { font-size:22px; margin:44px 0 6px; padding-top:18px; border-top:1px solid var(--border); }
+  h3 { font-size:16px; margin:22px 0 6px; color:var(--accent); }
+  p, li { color:#cfd6e0; }
+  .muted { color:var(--muted); }
+  code, kbd { background:var(--panel2); border:1px solid var(--border); border-radius:5px; padding:1px 6px; font-size:13px; }
+  .lead { color:var(--muted); font-size:16px; margin-top:0; }
+  .meta { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 4px; }
+  .tag { font-size:12px; padding:3px 10px; border-radius:20px; background:var(--panel2); border:1px solid var(--border); color:var(--muted); }
+  .tag.g { color:var(--green); border-color:var(--green); }
+  ol.steps { list-style:none; counter-reset:s; padding:0; margin:10px 0; }
+  ol.steps > li { counter-increment:s; position:relative; background:var(--panel); border:1px solid var(--border); border-radius:10px;
+                  padding:12px 14px 12px 52px; margin:8px 0; }
+  ol.steps > li::before { content:counter(s); position:absolute; left:14px; top:12px; width:26px; height:26px; border-radius:50%;
+                  background:var(--accent); color:#fff; font-weight:700; font-size:13px; display:grid; place-items:center; }
+  ol.steps b.t { display:block; color:var(--text); margin-bottom:2px; }
+  .note, .warn, .tip { border-radius:10px; padding:10px 14px; margin:12px 0; font-size:14px; border:1px solid var(--border); background:var(--panel); }
+  .warn { border-color:var(--red); }
+  .tip { border-color:var(--green); }
+  .note { border-color:var(--amber); }
+  .note b:first-child, .warn b:first-child, .tip b:first-child { margin-right:4px; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:14px; }
+  th, td { text-align:left; border:1px solid var(--border); padding:7px 10px; vertical-align:top; }
+  th { background:var(--panel2); }
+  ul { padding-left:22px; }
+  .tabs { color:var(--accent); font-weight:600; }
+  footer { margin-top:50px; color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+<nav>
+  <b>🎬 Recap Studio Guide</b>
+  <a href="#setup">Setup</a>
+  <a href="#overview">How it works</a>
+  <a href="#movie">Movie recap</a>
+  <a href="#show">Show recap</a>
+  <a href="#minidoc">NBA mini-doc</a>
+  <a href="#story">NBA story</a>
+  <a href="#real">Real story</a>
+  <a href="#ranking">Ranking</a>
+  <a href="#voice">Voices</a>
+  <a href="#videopad">VideoPad</a>
+  <a href="#premiere">Premiere</a>
+  <a href="#fix">Problems</a>
+</nav>
+
+<main>
+<h1>Recap Studio: step by step</h1>
+<p class="lead">A guide for every video type. Everything happens in the app (the browser tab that START_UI.bat opens). Bold <span class="tabs">tab names</span> mean the tabs along the top of a project.</p>
+
+<h2 id="setup">0. One-time setup</h2>
+<ol class="steps">
+  <li><b class="t">Run SETUP.bat once</b>It installs the Python packages, yt-dlp and FFmpeg. If something later says "missing", run it again.</li>
+  <li><b class="t">Double-click START_UI.bat</b>Your browser opens Recap Studio. Keep the black window open while you work; close it to stop the app.</li>
+  <li><b class="t">Check the tool lights (bottom-left)</b>FFmpeg, ffprobe, yt-dlp and edge-tts should be green.</li>
+  <li><b class="t">Add API keys (optional): click 🔑 API keys</b>Paste your ElevenLabs and/or MiniMax key and press Save. You can paste several keys separated by commas. <b>You can skip this entirely and use Edge-TTS, which is free and needs no key.</b></li>
+</ol>
+<div class="warn"><b>Keys are secrets.</b> They are saved only in <code>keys.env</code> on your computer. Never send that file to anyone, and if you share the RecapStudio folder, delete or blank <code>keys.env</code> first.</div>
+
+<h2 id="overview">1. How every video works</h2>
+<p>All six video types use the same pipeline. A video is a list of <b>segments</b>: one line of narration plus the picture that plays under it. Claude writes that list for you; the app turns it into voice and video.</p>
+<table>
+  <tr><th>Phase</th><th>What happens</th><th>Where</th></tr>
+  <tr><td>1. Create</td><td>Make a project and pick the video type, length and style.</td><td>＋ New project</td></tr>
+  <tr><td>2. Source</td><td>Recaps: add the film. Others: collect clips and images.</td><td><span class="tabs">Footage</span></td></tr>
+  <tr><td>3. Script</td><td>Copy the prompt, give it to Claude, paste Claude's reply back.</td><td><span class="tabs">Script</span></td></tr>
+  <tr><td>4. Voice</td><td>Preview 3 segments, then generate the full voice-over.</td><td><span class="tabs">Voice</span></td></tr>
+  <tr><td>5. Build</td><td>Make the Premiere sequence (and the mp4 for recaps).</td><td><span class="tabs">Run steps</span></td></tr>
+  <tr><td>6. Collect</td><td>Open the finished files.</td><td><span class="tabs">Outputs</span></td></tr>
+</table>
+<div class="note"><b>Two things to know.</b> (1) <b>▶ Run all</b> on the Run steps tab also generates the voice-over, which can spend ElevenLabs credits. Only press it once your script is imported and you've done a Preview. (2) Claude here means a separate chat (claude.ai). The app does not talk to Claude by itself; you copy and paste between them.</div>
+
+<h3>The Claude hand-off (same for every type)</h3>
+<ol class="steps">
+  <li><b class="t">Script tab → Copy prompt</b>The prompt already matches your video type.</li>
+  <li><b class="t">Open a new Claude chat and paste it</b>Then tell Claude your topic or film, length and anything special. Recaps: also attach the .srt file (see below).</li>
+  <li><b class="t">Copy Claude's whole reply</b>Don't trim it; the app finds the JSON inside by itself.</li>
+  <li><b class="t">Script tab → Paste Claude's reply → Import JSON</b>You'll see the segments as cards. Edit any text right there, then press 💾 Save script.</li>
+</ol>
+
+<!-- ============================ MOVIE ============================ -->
+<h2 id="movie">2. Movie recap</h2>
+<p class="muted">A narrated retelling of one film, cut from the film itself.</p>
+<div class="meta"><span class="tag">Default length 10:00</span><span class="tag">Source: the film file</span><span class="tag g">Can finish as a ready mp4</span></div>
+
+<ol class="steps">
+  <li><b class="t">＋ New project → Movie recap</b>Name it after the film. Pick a style: <b>retell</b> (what happens), <b>commentary</b> (themes and analysis) or <b>mixed</b>. Set the target length.</li>
+  <li><b class="t">Put the film in the project folder</b>Footage tab → "The film / episode (project root)" → Upload video. <b>For big files (over ~2 GB) it's faster to click 📂 Open folder and drag the film into the folder.</b> For a single film it must be in this main folder (not footage/), because the build looks for the one big film there.</li>
+  <li><b class="t">Run steps → Extract subtitles</b>Saves the film's subtitle tracks into the <code>subs/</code> folder. Find the English <code>.srt</code> there (📂 Open folder).
+    <div class="note"><b>No subtitles found?</b> Some films have none embedded, or only picture-based ones (which can't be converted). Download an English .srt for that exact version of the film and drop it into <code>subs/</code>.</div></li>
+  <li><b class="t">Get the script from Claude</b>Do the hand-off above and attach the .srt. Claude cuts the film into segments, each with a time range anchored to the subtitle line it describes.</li>
+  <li><b class="t">Fix "need visual" parts (if any)</b>Wordless or action scenes can't be read from subtitles, so Claude marks them <code>need_visual</code>. Run steps → <b>Contact sheets</b>, upload the images from <code>sheets/</code> to the same Claude chat, and ask it to finalise. Import the new reply.</li>
+  <li><b class="t">Voice tab</b>Pick an engine and voice, Save, then <b>Preview 3 segments</b>. Happy? Press <b>Generate</b>. Afterwards the log shows "target 10:00, actual 11:20…". If you're over, ask Claude to shorten the longest segments it lists, import, and Generate again. Only the changed segments are re-voiced.</li>
+  <li><b class="t">Run steps → Build full video</b>Produces <code>recap_final.mp4</code>. Each clip is cut to exactly the length of its narration. Want to polish in Premiere instead? Run <b>Build Premiere XML</b>.</li>
+  <li><b class="t">Captions (optional)</b>Run steps → <b>Build subtitles</b> makes <code>recap_subtitles.srt</code>.</li>
+  <li><b class="t">TikTok version (optional)</b>Ask Claude for a TikTok section ("add TikTok parts, hook first") and import it. Then Run steps → <b>Build TikTok</b>. Vertical 9:16 files land in <code>tiktok_out/</code>.</li>
+  <li><b class="t">Outputs tab</b>Preview and download everything.</li>
+</ol>
+<div class="warn"><b>Heads-up:</b> the mp4 doesn't burn in on-screen captions or number graphics. Those only appear in the Premiere XML version.</div>
+
+<!-- ============================ SHOW ============================ -->
+<h2 id="show">3. Show recap</h2>
+<p class="muted">Same as a movie recap, but across a whole season. Upload every episode at once; subtitles for all of them come out of one click.</p>
+<div class="meta"><span class="tag">Default length 10:00</span><span class="tag">Source: episode files</span><span class="tag g">Can finish as a ready mp4</span></div>
+
+<ol class="steps">
+  <li><b class="t">＋ New project → Show recap</b>Name it after the show and season. Pick style and length as for a movie.</li>
+  <li><b class="t">Upload all the episodes at once</b>Footage tab → <b>Episodes</b> → <b>Upload episodes (many at once)</b>, then select every episode in the file picker (Ctrl+A). They are saved in <code>footage/</code>. For a full season it's faster to click 📂 Open folder and drag all the files into the <code>footage</code> folder.
+    <div class="tip"><b>Name them so they sort in order:</b> <code>Episode01.mkv</code>, <code>Episode02.mkv</code>, … (or the show's own file names, as long as they're in story order).</div></li>
+  <li><b class="t">Run steps → Extract subtitles (once, for all episodes)</b>It goes through every episode and saves the English subtitles into <code>subs/</code>. It also writes <code>subs/ALL_EPISODES_for_claude.txt</code>: <b>every episode's subtitles in one file</b>, each block headed with the episode's file name.
+    <div class="note"><b>An episode with no usable subtitles</b> is listed in the log. Download an English .srt for it and put it in <code>subs/</code> named like the video (<code>Episode03.srt</code> for <code>Episode03.mkv</code>), then run Extract subtitles again. It's picked up and added to the combined file.</div></li>
+  <li><b class="t">Get the script from Claude</b>Do the hand-off and attach just <b>ALL_EPISODES_for_claude.txt</b>. Claude uses each block's episode file name as the segment's <code>src</code>. Episodes stay in story order unless you ask otherwise.</li>
+  <li><b class="t">Contact sheets, Voice, Build, TikTok</b>Exactly as steps 5–10 of the Movie recap. Everything finds the right episode from each segment's <code>src</code>, so there's nothing more to do per episode.</li>
+</ol>
+<div class="note"><b>If a segment shows a black slate</b>, its <code>src</code> name doesn't match a file in footage/. Fix the name in the Script tab and Save.</div>
+
+<!-- ============================ MINIDOC ============================ -->
+<h2 id="minidoc">4. NBA mini-doc</h2>
+<p class="muted">A chaptered NBA documentary (hook, chapters, closing line), built from clips you collect. Finishes as a <b>rough cut in Premiere</b>.</p>
+<div class="meta"><span class="tag">Default length 8:00</span><span class="tag">Source: clips you collect</span><span class="tag">Output: Premiere XML</span></div>
+
+<ol class="steps">
+  <li><b class="t">＋ New project → NBA mini-doc</b>Fill in the topic (for example "Kobe's 81-point game"). Set the length.</li>
+  <li><b class="t">Get the script</b>Do the hand-off. Tell Claude the topic. It replies with a <b>fact-check table</b> (every number, date and quote with a confidence flag) and then the JSON. <b>Read the table and verify anything marked medium or low before you publish.</b> Import the JSON.</li>
+  <li><b class="t">Footage tab → collect missing shots</b>Every segment that needs footage appears as a card with a description, search links (YouTube / X / Google Images) and a fallback idea. For each card do one of:
+    <ul>
+      <li><b>Paste a link</b> (optionally the time range like <code>1:42-1:51</code>) and press <b>Download</b>. Only that part is downloaded, using yt-dlp.</li>
+      <li><b>📎 Attach file</b> if you already have the clip or downloaded it by hand.</li>
+      <li><b>Skip</b> to leave a black "slate" card as a placeholder.</li>
+    </ul>
+    Clips are saved as <code>footage/&lt;segment id&gt;.mp4</code>. Source links are logged in <code>credits.txt</code>.</li>
+  <li><b class="t">Run steps → Index footage (optional)</b>For long full-video downloads, this makes contact sheets so Claude can give you exact timestamps, which you can then use as the range when you paste the link.</li>
+  <li><b class="t">Voice tab</b>Preview 3 segments, then Generate. Check the "actual vs target" length in the log.</li>
+  <li><b class="t">Run steps → Build Premiere XML</b>Creates <code>premiere_sequence.xml</code> plus the shot list and chapters. Then <b>Build subtitles</b>. See <a href="#premiere">Opening it in Premiere</a>.</li>
+</ol>
+<div class="tip"><b>Tip:</b> segments with crowd noise or commentary can have <code>keep_audio</code> set, so the clip's original sound plays quietly under your voice-over.</div>
+
+<!-- ============================ STORY ============================ -->
+<h2 id="story">5. NBA story</h2>
+<p class="muted">A short, fast NBA piece (30–90 seconds): hook in the first 5 seconds, setup, turn, payoff. No chapters.</p>
+<div class="meta"><span class="tag">Default length 3:00 (aim for 0:30–1:30)</span><span class="tag">Source: clips you collect</span><span class="tag">Output: Premiere XML</span></div>
+
+<ol class="steps">
+  <li><b class="t">＋ New project → NBA story</b>Topic = the moment or story. <b>Change the target length to 0:45 or 1:00</b> (the default is longer than a typical short).</li>
+  <li><b class="t">Script, footage, voice, build</b>Identical to the NBA mini-doc: hand-off with the fact-check table, collect the missing shots, Preview then Generate voice, Build Premiere XML.</li>
+</ol>
+<div class="tip"><b>Tip:</b> pick one famous, widely-clipped moment. Fewer segments means far less footage hunting.</div>
+
+<!-- ============================ REAL ============================ -->
+<h2 id="real">6. Real story</h2>
+<p class="muted">A true-story video about real people and events, mostly photos and news footage, with lots of on-screen names, dates and places.</p>
+<div class="meta"><span class="tag">Default length 6:00</span><span class="tag">Source: stills + news clips</span><span class="tag">Output: Premiere XML</span></div>
+
+<ol class="steps">
+  <li><b class="t">＋ New project → Real story</b>Topic = the story. Set length.</li>
+  <li><b class="t">Get the script</b>Hand-off as before. Claude must give a fact-check table. <b>This is about real people: verify every claim, never state allegations as facts, and drop anything you can't support.</b></li>
+  <li><b class="t">Footage tab → collect</b>Most cards will want a photo or a news clip. Paste a link, or <b>Attach file</b> for images you saved. Stills are saved as <code>images/&lt;segment id&gt;.jpg</code> and get a slow zoom.</li>
+  <li><b class="t">Voice, then Build Premiere XML</b>Same as the NBA mini-doc. Captions (names, dates, places) arrive as on-screen graphics inside the Premiere sequence.</li>
+</ol>
+<div class="note"><b>Copyright:</b> using lots of someone else's footage with little commentary can get claims or strikes. Check <code>credits.txt</code> and prefer short clips with real commentary over them.</div>
+
+<!-- ============================ RANKING ============================ -->
+<h2 id="ranking">7. Ranking / top-N</h2>
+<p class="muted">A countdown video: short intro, then from the last place up to #1, then an outro.</p>
+<div class="meta"><span class="tag">Default length 6:00</span><span class="tag">Source: one clip per item</span><span class="tag">Output: Premiere XML</span></div>
+
+<ol class="steps">
+  <li><b class="t">＋ New project → Ranking / top-N</b>Topic = what you're ranking, for example "Top 10 NBA dunkers".</li>
+  <li><b class="t">Get the script</b>Tell Claude how many items and the ranking rule. Each item segment gets a <code>rank</code> (the big number on screen) and a <code>caption</code> (the name). Fact-check table first; verify it.</li>
+  <li><b class="t">Footage tab → collect one clip per item</b>Same as the mini-doc: link plus range, attach a file, or skip.</li>
+  <li><b class="t">Voice, then Build Premiere XML</b>The number and caption graphics are transparent clips on track V2 in the sequence. They only show up in Premiere, not in an mp4.</li>
+</ol>
+<div class="tip"><b>Tip:</b> to ask for a longer #1, tell Claude to give the winner two segments.</div>
+
+<!-- ============================ VOICES ============================ -->
+<h2 id="voice">Choosing a voice</h2>
+<table>
+  <tr><th>Engine</th><th>Cost</th><th>Notes</th></tr>
+  <tr><td>Edge-TTS</td><td>Free, unlimited</td><td>No key needed. Good for testing the whole pipeline. Try Christopher (classic recap narrator) or Guy (documentary).</td></tr>
+  <tr><td>ElevenLabs</td><td>Credits</td><td>Most natural. Pick a premade voice with the Fetch button (🔑 key needed). Several keys can share the load.</td></tr>
+  <tr><td>MiniMax</td><td>Credits</td><td>Alternative engine (speech-2.6-hd). Key needed.</td></tr>
+</table>
+<ul>
+  <li><b>Always press Preview first</b> (3 segments) before spending credits on the full voice-over.</li>
+  <li><b>Voice text style</b> (Settings tab): <code>plain</code> reads text as written. <code>light</code>/<code>heavy</code> let Claude add emotion tags like [excited], and only ElevenLabs v3 uses them; other engines always get plain text so tags aren't read aloud.</li>
+  <li>A name pronounced wrong? Have Claude respell it for the voice and keep the real spelling in the segment's <code>subtitle</code> field, so captions stay correct.</li>
+  <li>Edit a line and Generate again: only changed segments are re-voiced. <b>Regenerate all</b> redoes everything.</li>
+</ul>
+
+<h2 id="videopad">Opening it in VideoPad</h2>
+<ol class="steps">
+  <li><b class="t">Run steps → Build VideoPad project</b> Writes <code>videopad_project.vpj</code> next to the XML, with the same timeline.</li>
+  <li><b class="t">File → Open Project</b> and pick it. VideoPad warns that the file "may be damaged" - that is expected, click <b>Try Load</b> (it can appear more than once).</li>
+  <li><b class="t">If it will not open</b> run <b>Build VideoPad project (simple)</b> instead: picture + voice only (V1 and A1), no graphics, original sound or music.</li>
+</ol>
+<p class="muted">Tracks: V1 footage, V2 number/caption graphics, A1 voice-over, A2 original sound, A3 music. Chapter markers are not carried over (use <code>chapters.txt</code>). Keep <code>clips/</code>, <code>clips_av/</code>, <code>gfx/</code> and <code>audio_trim/</code> where they are.</p>
+
+<h2 id="premiere">Opening it in Premiere</h2>
+<ol class="steps">
+  <li><b class="t">File → Import</b> <code>premiere_sequence.xml</code> from the project folder. Open the new sequence.</li>
+  <li><b class="t">Then import</b> <code>recap_subtitles.srt</code> and drag it onto the timeline (after the sequence is open).</li>
+</ol>
+<table>
+  <tr><th>Track</th><th>Contents</th></tr>
+  <tr><td>V1</td><td>Footage, stills, slates (black cards for missing shots)</td></tr>
+  <tr><td>V2</td><td>Number and caption graphics</td></tr>
+  <tr><td>A1</td><td>Voice-over</td></tr>
+  <tr><td>A2</td><td>Original clip sound (only segments with keep_audio)</td></tr>
+  <tr><td>A3</td><td>Music bed (Settings → "background music bed" on, and a track uploaded to Music)</td></tr>
+</table>
+<div class="warn"><b>Don't move or rename</b> the <code>clips/</code>, <code>gfx/</code> and <code>audio_trim/</code> folders after importing, or Premiere loses the links. Sequence markers show chapters and any missing shots.</div>
+<p class="muted">Clips from a different shape (old 4:3 games, vertical video) can look odd: Settings → <b>Fill</b> → <code>pad</code> (black bars) or <code>blur</code> (blurred background).</p>
+
+<h2 id="fix">When something goes wrong</h2>
+<table>
+  <tr><th>Problem</th><th>Fix</th></tr>
+  <tr><td>"No video found"</td><td>Put the film in the project's main folder, or the episodes in <code>footage/</code>. Extract subtitles looks in both.</td></tr>
+  <tr><td>"This video has no embedded subtitle tracks"</td><td>Download an English .srt for that version of the film and put it in <code>subs/</code>.</td></tr>
+  <tr><td>A footage download fails (403 or blocked)</td><td>The app already retries with several YouTube methods. If it still fails, download the clip another way and use <b>📎 Attach file</b>.</td></tr>
+  <tr><td>"No ElevenLabs key found"</td><td>Click 🔑 API keys and paste it, or switch the Voice tab to Edge-TTS.</td></tr>
+  <tr><td>Voice-over is longer than the target</td><td>Ask Claude to shorten the longest segments from the log, import, Generate again.</td></tr>
+  <tr><td>A tool light is red</td><td>Run SETUP.bat again, then restart START_UI.bat.</td></tr>
+  <tr><td>Need to continue in a new chat</td><td>Open the project's Dashboard, copy the Status / next steps text (also saved as STATE.md) and paste it to Claude.</td></tr>
+  <tr><td>Port or "can't connect"</td><td>Close the black window and run START_UI.bat again. Use the address printed in the window.</td></tr>
+</table>
+
+<footer>Recap Studio v2 · everything stays on your computer.</footer>
+</main>
+</body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "module": "movie_recap",
+  "topic": "",
+  "style": "retell",
+  "target_length": "",
+  "platform": "youtube",
+  "tts_mode": "plain",
+  "voice_card": "",
+  "fact_check": "off",
+  "music": false,
+  "captions": true
+}

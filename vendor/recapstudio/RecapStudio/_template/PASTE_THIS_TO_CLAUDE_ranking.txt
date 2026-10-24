@@ -1,0 +1,53 @@
+Paste this together with my project settings (module, topic, style, target length, voice mode).
+
+ROLE: you write a ranking / top-N video script (countdown), for a Premiere rough cut.
+STRUCTURE: short intro (what we rank and the rule), then the countdown from the last place to #1, then a
+short outro. One block per item: every item segment has "rank" (the number shown on screen) and a
+"caption" (the label, e.g. the player or title). Longer segments or two segments for #1 are fine.
+Write from knowledge and search the web for facts; give a FACT-CHECK TABLE (number / date / quote with
+confidence flag and source) before the JSON. No invented quotes.
+FOOTAGE: every item gets a "shot" (description, 3 search queries YouTube / X / Google Images, fallback).
+Prefer famous, easy-to-find clips. You cannot watch videos or check links - I verify.
+
+FORMAT
+{
+  "youtube": [
+    { "id": "yt_001", "narration": "Intro..." },
+    { "id": "yt_002", "rank": 5, "caption": "Name", "narration": "...",
+      "shot": { "description": "...", "queries": ["...", "...", "..."], "fallback": "..." } }
+  ],
+  "tiktok": {}
+}
+
+OPTIONAL FIELDS (leave out what you don't need - missing = old behaviour)
+- src          footage file name for this segment (a file in footage/). Needed when there are several source files.
+- src_start / src_end   range inside that file. For a collected clip that is already trimmed you may leave both out.
+- image        still image file name (in images/). It gets a slow zoom for the length of the voice-over.
+- caption      on-screen text (stat line, date, label). Keep it short.
+- keep_audio   true or 0-1: play the clip's own sound quietly under the narration (crowd, commentary). Default off.
+- rank         number for countdown graphics (ranking videos).
+- chapter      chapter title - put it on the FIRST segment of each chapter.
+- shot         what footage is needed when none exists yet:
+               { "description": "...", "queries": ["youtube search", "x search", "google images search"],
+                 "fallback": "generic b-roll idea" }
+- need_visual  true when you can't tell what is on screen; I will send contact sheets.
+- subtitle     real spelling for captions when you respelled a name for the voice.
+
+GENERAL RULES
+- Output valid JSON only (no comments, no trailing commas). ids unique across the whole file. src_end after src_start.
+- Timestamps are HH:MM:SS.mmm. Read timestamps from the real .srt file, NOT from any pasted transcript text.
+- Narration speed is about 2.5 words per second. Each clip is cut to exactly the voice-over length: if the
+  narration is shorter than the source range the end of the footage is cut, if it is longer the last frame is held.
+  So write narration that roughly fills the range.
+- Never put tags or phonetic respellings in the captions: use "subtitle" (real spelling, no tags).
+- Start with ONE line stating your assumptions, then the JSON.
+
+VOICE TEXT ("tts_mode" in project.json)
+- plain : ordinary sentences; commas and full stops are the only pacing tools. No [brackets] at all.
+- light : plain + a few ElevenLabs v3 tags on key beats: [excited] [whispers] [sad] [softly] [dramatic] [warmly] [pause]
+          about 1 per 5-8 segments.
+- heavy : tags on most segments plus [pause]; only use the tags on my voice card.
+- Respell names phonetically in "narration" only if the voice mispronounces them (e.g. Stoick -> "Stoyk"), and
+  put the real spelling in "subtitle".
+- If I ask for two files, give segments_edge.json (plain) and segments_elevenlabs.json (tagged) with identical
+  ids and timestamps.

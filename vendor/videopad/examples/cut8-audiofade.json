@@ -1,0 +1,14 @@
+{
+    "template": "probe.vpj",
+    "output": "../out/cut8-audiofade.vpj",
+    "sequenceName": "Audio Fade Test",
+    "media": [
+        { "id": "asym", "path": "../out/testmedia/asym.mp4" }
+    ],
+    "segments": [
+        { "source": "asym", "start": 0, "end": 3000 },
+        { "source": "asym", "start": 0, "end": 3000, "audioFadeIn": 800 },
+        { "source": "asym", "start": 0, "end": 3000, "audioFadeOut": 800 },
+        { "source": "asym", "start": 0, "end": 3000, "audioGainDb": -6, "audioFadeIn": 500, "audioFadeOut": 500 }
+    ]
+}

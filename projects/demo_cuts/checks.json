@@ -1,0 +1,92 @@
+{
+  "generated": "2026-10-24T12:09:24",
+  "plan": "projects\\demo_cuts\\plan.json",
+  "project": "projects\\demo_cuts\\demo_cuts.mlt",
+  "shotcut": "26.9.27",
+  "mlt": "7.41.0",
+  "frames": 311,
+  "skipped": [],
+  "clips": [
+    {
+      "source": "testclips\\part1_1_60-120.mp4",
+      "in": 0,
+      "out": 119,
+      "frames": 120,
+      "label": "crash into the wall"
+    },
+    {
+      "source": "testclips\\part1_1_60-120.mp4",
+      "in": 1025,
+      "out": 1126,
+      "frames": 102,
+      "label": "he takes a bite"
+    },
+    {
+      "source": "testclips\\part1_1_60-120.mp4",
+      "in": 1415,
+      "out": 1503,
+      "frames": 89,
+      "label": "the word is meat"
+    }
+  ],
+  "checks": [
+    {
+      "name": "xml",
+      "ok": true,
+      "detail": "83 element(s), 11 id(s), 11 reference(s) resolve, records Shotcut 26.9.27 / MLT 7.41.0"
+    },
+    {
+      "name": "effects",
+      "ok": true,
+      "detail": "4 name(s) -- avformat, color, frei0r.cairoblend, mix -- all in melt's own lists (674 filters / 59 transitions / 42 producers)",
+      "counts": "674 filters / 59 transitions / 42 producers",
+      "used": [
+        "avformat",
+        "color",
+        "frei0r.cairoblend",
+        "mix"
+      ]
+    },
+    {
+      "name": "lengths",
+      "ok": true,
+      "detail": "311 frames (10.377 s) = 120 + 102 + 89; A1 311, Background 311, V1 311",
+      "per_track": {
+        "Background": 311,
+        "V1": 311,
+        "A1": 311
+      }
+    },
+    {
+      "name": "render",
+      "ok": true,
+      "detail": "311/311 frames, 10.377 s of audio, 35.1 dB, 36.6 dB, 32.5 dB, control 13.5 dB, audio -23.2 dB vs source -23.5 dB, 14.4 s to render at 320x568",
+      "samples": [
+        {
+          "clip": 0,
+          "at_s": 2.002,
+          "source_frame": 60,
+          "offset_frames": 0,
+          "psnr": 35.1
+        },
+        {
+          "clip": 1,
+          "at_s": 5.706,
+          "source_frame": 1076,
+          "offset_frames": -1,
+          "psnr": 36.56
+        },
+        {
+          "clip": 2,
+          "at_s": 8.876,
+          "source_frame": 1459,
+          "offset_frames": -1,
+          "psnr": 32.54
+        }
+      ],
+      "control": 13.512042,
+      "mp4": "C:\\Users\\user\\Desktop\\Cutwright\\projects\\demo_cuts\\check\\proof.mp4",
+      "wav": "C:\\Users\\user\\Desktop\\Cutwright\\projects\\demo_cuts\\check\\proof.wav"
+    }
+  ]
+}

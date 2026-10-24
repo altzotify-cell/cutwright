@@ -1,0 +1,20 @@
+cutwright 0.1.0  build record
+plan           projects\demo_cuts\plan.json
+plan sha256    acd283fe1e0163139155a12fc18c97fd3b7077a49b970475570e88a528709aa8
+project        projects\demo_cuts\demo_cuts.mlt
+project sha256 4234355fdfdb4a6f6f788eec5efb0c502caa9eaec845f89a713039e5b24fe49e
+shotcut        26.9.27   (shotcut.exe product version)
+mlt            7.41.0   (melt.exe --version)
+profile        1080x1920, 30000/1001 fps, colorspace 709
+timeline       311 frames, 10.377 s, 3 clip(s)
+
+clips
+  0  producer1   testclips\part1_1_60-120.mp4                 0.000-4.004   frames 0-119  120 f  crash into the wall
+  1  producer2   testclips\part1_1_60-120.mp4                34.201-37.604  frames 1025-1126  102 f  he takes a bite
+  2  producer3   testclips\part1_1_60-120.mp4                47.214-50.183  frames 1415-1503  89 f  the word is meat
+
+checks
+  [+] xml      83 element(s), 11 id(s), 11 reference(s) resolve, records Shotcut 26.9.27 / MLT 7.41.0
+  [+] effects  4 name(s) -- avformat, color, frei0r.cairoblend, mix -- all in melt's own lists (674 filters / 59 transitions / 42 producers)
+  [+] lengths  311 frames (10.377 s) = 120 + 102 + 89; A1 311, Background 311, V1 311
+  [+] render   311/311 frames, 10.377 s of audio, 35.1 dB, 36.6 dB, 32.5 dB, control 13.5 dB, audio -23.2 dB vs source -23.5 dB, 14.4 s to render at 320x568

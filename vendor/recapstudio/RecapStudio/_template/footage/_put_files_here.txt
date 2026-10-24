@@ -1,0 +1,1 @@
+Put source footage here (episodes, collected clips). Collected shots are saved as <segment id>.mp4.

@@ -1,0 +1,20 @@
+RECAP STUDIO v2
+===============
+First time only:   double-click SETUP.bat   (Python packages incl. yt-dlp + FFmpeg)
+
+THE UI (recommended):   double-click START_UI.bat
+                   -> opens a browser tab that drives the whole workflow:
+                      projects, run steps (live logs), edit the script,
+                      collect footage (drag & drop), voice settings, preview outputs.
+                   Everything below still works if you prefer the old terminal flow.
+
+Terminal flow (legacy):
+   New video:      double-click NEW_PROJECT.bat (or drag a film onto it)
+                   -> a project folder opens. Run MENU.bat there.
+API keys:          in the UI click "API keys" (or edit keys.env). Edge-TTS needs no key.
+GUIDE:             in the UI click "Step-by-step guide" - how to make every video type.
+
+Video types: movie recap, show recap, NBA mini-doc, NBA story, real story, ranking.
+Each project is self-contained (own scripts, config.json, project.json, segments.json).
+Existing projects keep working - nothing is required to change.
+

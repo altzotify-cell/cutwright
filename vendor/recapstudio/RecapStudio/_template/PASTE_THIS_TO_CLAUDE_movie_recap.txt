@@ -1,0 +1,61 @@
+Paste this together with my project settings (module, topic, style, target length, voice mode).
+
+ROLE: you turn a film into a recap video script.
+INPUTS: the English .srt from subs/ (attach it), later the contact sheets from sheets/.
+STYLE (from project.json "style"):
+- retell     : what happens, scene by scene, in plain language.
+- commentary : analysis - themes, character mistakes, what it means. Do not just describe the plot.
+- mixed      : retell with short analysis beats.
+Size the whole script to the target length (about 150 words per minute of narration).
+
+HOW TO PICK RANGES
+- Anchor every range to the subtitle line that matches what the narration says. Do not choose a range from
+  nearby dialogue: it often shows a different scene.
+- For wordless / action beats you cannot see in the .srt, set need_visual true; I will send contact sheets
+  (labelled <id>_<HH-MM-SS>.jpg) and you finalise the narration from what is really on screen.
+- If a narration is far shorter than its range, tighten src_end.
+- Add a TikTok section only if I ask for it (hook first, each part within the target length).
+
+FORMAT
+{
+  "youtube": [
+    { "id": "yt_001", "src_start": "HH:MM:SS.mmm", "src_end": "HH:MM:SS.mmm",
+      "need_visual": false, "narration": "...", "subtitle": "..." }
+  ],
+  "tiktok": {
+    "part1": [ { "id": "tt1_001", "src_start": "HH:MM:SS.mmm", "src_end": "HH:MM:SS.mmm", "narration": "..." } ]
+  }
+}
+
+OPTIONAL FIELDS (leave out what you don't need - missing = old behaviour)
+- src          footage file name for this segment (a file in footage/). Needed when there are several source files.
+- src_start / src_end   range inside that file. For a collected clip that is already trimmed you may leave both out.
+- image        still image file name (in images/). It gets a slow zoom for the length of the voice-over.
+- caption      on-screen text (stat line, date, label). Keep it short.
+- keep_audio   true or 0-1: play the clip's own sound quietly under the narration (crowd, commentary). Default off.
+- rank         number for countdown graphics (ranking videos).
+- chapter      chapter title - put it on the FIRST segment of each chapter.
+- shot         what footage is needed when none exists yet:
+               { "description": "...", "queries": ["youtube search", "x search", "google images search"],
+                 "fallback": "generic b-roll idea" }
+- need_visual  true when you can't tell what is on screen; I will send contact sheets.
+- subtitle     real spelling for captions when you respelled a name for the voice.
+
+GENERAL RULES
+- Output valid JSON only (no comments, no trailing commas). ids unique across the whole file. src_end after src_start.
+- Timestamps are HH:MM:SS.mmm. Read timestamps from the real .srt file, NOT from any pasted transcript text.
+- Narration speed is about 2.5 words per second. Each clip is cut to exactly the voice-over length: if the
+  narration is shorter than the source range the end of the footage is cut, if it is longer the last frame is held.
+  So write narration that roughly fills the range.
+- Never put tags or phonetic respellings in the captions: use "subtitle" (real spelling, no tags).
+- Start with ONE line stating your assumptions, then the JSON.
+
+VOICE TEXT ("tts_mode" in project.json)
+- plain : ordinary sentences; commas and full stops are the only pacing tools. No [brackets] at all.
+- light : plain + a few ElevenLabs v3 tags on key beats: [excited] [whispers] [sad] [softly] [dramatic] [warmly] [pause]
+          about 1 per 5-8 segments.
+- heavy : tags on most segments plus [pause]; only use the tags on my voice card.
+- Respell names phonetically in "narration" only if the voice mispronounces them (e.g. Stoick -> "Stoyk"), and
+  put the real spelling in "subtitle".
+- If I ask for two files, give segments_edge.json (plain) and segments_elevenlabs.json (tagged) with identical
+  ids and timestamps.
