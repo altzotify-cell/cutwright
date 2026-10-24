@@ -118,6 +118,13 @@ later.
 |---|---|---|---|
 | `projects\demo_cuts\demo_cuts.mlt` | 4,724 | `4234355fdfdb4a6f6f788eec5efb0c502caa9eaec845f89a713039e5b24fe49e` | 3 clips from `testclips\part1_1_60-120.mp4`, 311 frames, Shotcut 26.9.27 / MLT 7.41.0 recorded inside. Two independent builds of the same plan are byte-identical, so the hash is a real fingerprint of the edit |
 | `projects\demo_fade\demo_fade.mlt` | 5,636 | `ad9335d181d258b18a2bc604d3b947b66ab3c0df1f9f8ce85e034d1e4af00297` | the same three cuts under a 0.8 s fade in and a 1.0 s fade out (24 and 30 frames at the timeline's own 29.97 fps), picture and sound. Two animated filters on the tractor, nothing else changed |
+| `projects\demo_title\demo_title.mlt` | 8,803 | `fbc6a197467e899c7444dfbf1434a8777f17aa83797a37a9ff8c4bf739434da5` | the same three cuts and the same fade, plus a V2 track carrying two `dynamictext` titles over transparent `color` producers (frames 27-95 and 192-257). Its own `sha256` is in `digest.txt`; the edit and the numbers it was checked against are in `checks.json` |
+
+The titles commit **did not** move the two hashes above. It did rewrite the
+`a_track` of the V2 blend -- that is the bug it fixes -- but the two older plans
+have no V2, and the audio `mix` transitions keep `a_track=0`, which is what
+Shotcut writes and where the summed audio belongs. Both were rebuilt at this
+commit and came out byte-identical.
 
 The fade commit did **not** move `demo_cuts`' hash: the profile fix it carries
 changed how renders are invoked (`-profile`), not what the writer emits. The

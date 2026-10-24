@@ -37,4 +37,39 @@ Everything before 2026-10-24 has no clock on it -- the log starts with the fade.
 12:49  docs      README (five checks, fade section, the -profile finding),
                   PROVENANCE (demo_fade hash, and the note that demo_cuts' hash
                   did not move), REPORT.md and this log created.
+~12:55 titles    titles were written into V2 and never appeared: melt 7.41 here
+                  ignores a blend's a_track=0 for any track above V1 -- it
+                  composites onto the *background* instead of the running
+                  picture. Shotcut writes a_track=0 in its own files; this writer
+                  had copied it. Three-track probe (black / green / red):
+                  composite a=0 b=2 changed nothing, a=1 b=2 put red over green
+                  in the requested half. Centre-band YMAX 195 -> 250 on the demo.
+~13:05 titles    first control that "removed the titles" removed V2 with them:
+                  cairo then moved every frame by 33 dB and melt skipped a blend
+                  whose b-frame never arrived, which is louder than the defect
+                  being looked for. Replaced with no_title_text: the same
+                  producer, the same track, the same frames, one <filter> left
+                  out. Frame 25 went to inf; frames 96/190/258 still read 32-36
+                  dB.
+~13:20 titles    that residue was the codec, not the text: under H.264 a bright
+                  title is carried a little way into the frames after it through
+                  inter prediction. check_titles now renders both sides itself at
+                  crf=0 (about 8 MB and a few seconds a side); the quiet frames
+                  are then bit-identical. The render check's own proof stays
+                  lossy at 270 wide.
+13:32  titles    demo_title build: all six checks pass -- band 23.3 / 20.0 / 20.6
+                  dB against 29.5 / 26.2 / 26.8 dB whole-frame at the first,
+                  middle and last frame of title 1, 23.8 / 26.3 / 21.3 against
+                  29.9 / 32.4 / 27.5 dB for title 2, and frames 25, 96, 190, 258
+                  identical to the control.
+13:32  docs      README (six checks, Titles section, the a_track finding, plan
+                  schema), REPORT (demo_title section and row), this log.
+13:58  titles    cairoblend now defaults a_track to b_track - 1, but the audio
+                  `mix` transitions pass a_track=0 explicitly: audio sums into
+                  the background frame (Shotcut writes it that way) and only the
+                  picture needs the running track as its a-frame. The blanket
+                  default had rewritten the A1 mix line too and moved both older
+                  demos' hashes for no measured gain; rebuilt at this commit,
+                  demo_cuts and demo_fade are byte-identical again. demo_title
+                  was rebuilt twice and is byte-identical to itself.
 ```

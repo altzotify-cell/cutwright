@@ -1,0 +1,44 @@
+{
+  "name": "demo_title",
+  "title": "Cutwright demo: two titles on their own track, over the three cuts",
+  "fade": {
+    "in": 0.8,
+    "out": 1.0
+  },
+  "titles": [
+    {
+      "text": "the three cuts",
+      "in": 0.9,
+      "out": 3.2,
+      "size": 72,
+      "position": "middle"
+    },
+    {
+      "text": "the word is meat",
+      "in": 6.4,
+      "out": 8.6,
+      "size": 48,
+      "position": "lower"
+    }
+  ],
+  "clips": [
+    {
+      "source": "testclips/part1_1_60-120.mp4",
+      "in": 0.0,
+      "out": 4.0,
+      "label": "crash into the wall"
+    },
+    {
+      "source": "testclips/part1_1_60-120.mp4",
+      "in": 34.2,
+      "out": 37.6,
+      "label": "he takes a bite"
+    },
+    {
+      "source": "testclips/part1_1_60-120.mp4",
+      "in": 47.2,
+      "out": 50.2,
+      "label": "the word is meat"
+    }
+  ]
+}

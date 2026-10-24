@@ -1,0 +1,244 @@
+{
+  "generated": "2026-10-24T13:44:28",
+  "plan": "projects\\demo_title\\plan.json",
+  "project": "projects\\demo_title\\demo_title.mlt",
+  "shotcut": "26.9.27",
+  "mlt": "7.41.0",
+  "frames": 311,
+  "skipped": [],
+  "clips": [
+    {
+      "source": "testclips\\part1_1_60-120.mp4",
+      "in": 0,
+      "out": 119,
+      "frames": 120,
+      "label": "crash into the wall"
+    },
+    {
+      "source": "testclips\\part1_1_60-120.mp4",
+      "in": 1025,
+      "out": 1126,
+      "frames": 102,
+      "label": "he takes a bite"
+    },
+    {
+      "source": "testclips\\part1_1_60-120.mp4",
+      "in": 1415,
+      "out": 1503,
+      "frames": 89,
+      "label": "the word is meat"
+    }
+  ],
+  "titles": [
+    {
+      "text": "the three cuts",
+      "in": 27,
+      "out": 95,
+      "frames": 69,
+      "position": "middle",
+      "size": 72
+    },
+    {
+      "text": "the word is meat",
+      "in": 192,
+      "out": 257,
+      "frames": 66,
+      "position": "lower",
+      "size": 48
+    }
+  ],
+  "checks": [
+    {
+      "name": "xml",
+      "ok": true,
+      "detail": "163 element(s), 22 id(s), 14 reference(s) resolve, records Shotcut 26.9.27 / MLT 7.41.0"
+    },
+    {
+      "name": "effects",
+      "ok": true,
+      "detail": "7 name(s) -- avformat, brightness, color, dynamictext, frei0r.cairoblend, mix, volume -- all in melt's own lists (674 filters / 59 transitions / 42 producers)",
+      "counts": "674 filters / 59 transitions / 42 producers",
+      "used": [
+        "avformat",
+        "brightness",
+        "color",
+        "dynamictext",
+        "frei0r.cairoblend",
+        "mix",
+        "volume"
+      ]
+    },
+    {
+      "name": "lengths",
+      "ok": true,
+      "detail": "311 frames (10.377 s) = 120 + 102 + 89; A1 311, Background 311, V1 311, V2 311",
+      "per_track": {
+        "Background": 311,
+        "V1": 311,
+        "V2": 311,
+        "A1": 311
+      }
+    },
+    {
+      "name": "render",
+      "ok": true,
+      "detail": "311/311 frames, 10.377 s of audio, 26.0 dB, 34.4 dB, 31.6 dB, control 13.4 dB, audio -23.9 dB vs source -23.5 dB, 35.3 s to render at 270x480",
+      "samples": [
+        {
+          "clip": 0,
+          "at_s": 2.002,
+          "source_frame": 60,
+          "offset_frames": -1,
+          "psnr": 26.0
+        },
+        {
+          "clip": 1,
+          "at_s": 5.706,
+          "source_frame": 1076,
+          "offset_frames": 0,
+          "psnr": 34.39
+        },
+        {
+          "clip": 2,
+          "at_s": 8.876,
+          "source_frame": 1459,
+          "offset_frames": 0,
+          "psnr": 31.56
+        }
+      ],
+      "control": 13.42154,
+      "mp4": "C:\\Users\\user\\Desktop\\Cutwright\\projects\\demo_title\\check\\proof.mp4",
+      "wav": "C:\\Users\\user\\Desktop\\Cutwright\\projects\\demo_title\\check\\proof.wav"
+    },
+    {
+      "name": "fade",
+      "ok": true,
+      "detail": "level first frame 0.00, half way into the fade in 0.28, first frame after the fade in 0.99, last frame before the fade out 1.00, half way into the fade out 0.45, last frame 0.00, frame 25, inside the edit 0.99, frame 155, inside the edit 1.00, frame 279, inside the edit 1.00, sound -76.0 dB at the head against -23.5 dB in the middle",
+      "samples": [
+        {
+          "what": "first frame",
+          "frame": 0,
+          "at_s": 0.0,
+          "level": 0.0
+        },
+        {
+          "what": "half way into the fade in",
+          "frame": 11,
+          "at_s": 0.367,
+          "level": 0.285
+        },
+        {
+          "what": "first frame after the fade in",
+          "frame": 24,
+          "at_s": 0.801,
+          "level": 0.99
+        },
+        {
+          "what": "last frame before the fade out",
+          "frame": 280,
+          "at_s": 9.343,
+          "level": 1.0
+        },
+        {
+          "what": "half way into the fade out",
+          "frame": 295,
+          "at_s": 9.843,
+          "level": 0.45
+        },
+        {
+          "what": "last frame",
+          "frame": 310,
+          "at_s": 10.344,
+          "level": 0.0
+        },
+        {
+          "what": "frame 25, inside the edit",
+          "frame": 25,
+          "at_s": 0.834,
+          "level": 0.992
+        },
+        {
+          "what": "frame 155, inside the edit",
+          "frame": 155,
+          "at_s": 5.172,
+          "level": 1.0
+        },
+        {
+          "what": "frame 279, inside the edit",
+          "frame": 279,
+          "at_s": 9.309,
+          "level": 1.0
+        }
+      ]
+    },
+    {
+      "name": "titles",
+      "ok": true,
+      "detail": "title 1 frames 27-95: first frame band 23.3 / frame 29.5 dB, middle frame band 20.0 / frame 26.2 dB, last frame band 20.6 / frame 26.8 dB; title 2 frames 192-257: first frame band 23.8 / frame 29.9 dB, middle frame band 26.3 / frame 32.4 dB, last frame band 21.3 / frame 27.5 dB, clear outside the window at frame(s) 25 (inf dB), 96 (inf dB), 190 (inf dB), 258 (inf dB)",
+      "samples": [
+        {
+          "title": 1,
+          "what": "first frame",
+          "frame": 28,
+          "whole_psnr": 29.49,
+          "band_psnr": 23.29
+        },
+        {
+          "title": 1,
+          "what": "middle frame",
+          "frame": 61,
+          "whole_psnr": 26.18,
+          "band_psnr": 19.98
+        },
+        {
+          "title": 1,
+          "what": "last frame",
+          "frame": 94,
+          "whole_psnr": 26.75,
+          "band_psnr": 20.55
+        },
+        {
+          "title": 2,
+          "what": "first frame",
+          "frame": 193,
+          "whole_psnr": 29.94,
+          "band_psnr": 23.76
+        },
+        {
+          "title": 2,
+          "what": "middle frame",
+          "frame": 224,
+          "whole_psnr": 32.42,
+          "band_psnr": 26.26
+        },
+        {
+          "title": 2,
+          "what": "last frame",
+          "frame": 256,
+          "whole_psnr": 27.52,
+          "band_psnr": 21.32
+        },
+        {
+          "title": 1,
+          "frame": 25,
+          "whole_psnr": Infinity
+        },
+        {
+          "title": 1,
+          "frame": 96,
+          "whole_psnr": Infinity
+        },
+        {
+          "title": 2,
+          "frame": 190,
+          "whole_psnr": Infinity
+        },
+        {
+          "title": 2,
+          "frame": 258,
+          "whole_psnr": Infinity
+        }
+      ]
+    }
+  ]
+}

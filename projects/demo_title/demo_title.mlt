@@ -1,0 +1,188 @@
+<?xml version="1.0" standalone="no"?>
+<!-- Cutwright 0.1.0 | Shotcut 26.9.27 | MLT 7.41.0 | 1080x1920 29.97 fps -->
+<mlt LC_NUMERIC="C" version="7.41.0" title="Shotcut version 26.9.27" producer="tractor0">
+  <profile description="1080x1920 29.97 fps" width="1080" height="1920" progressive="1" sample_aspect_num="1" sample_aspect_den="1" display_aspect_num="9" display_aspect_den="16" frame_rate_num="30000" frame_rate_den="1001" colorspace="709" />
+  <producer id="producer0" in="0" out="310">
+    <property name="length">311</property>
+    <property name="eof">pause</property>
+    <property name="resource">0</property>
+    <property name="aspect_ratio">1</property>
+    <property name="mlt_service">color</property>
+    <property name="mlt_image_format">rgba</property>
+    <property name="set.test_audio">0</property>
+  </producer>
+  <producer id="producer1" in="0" out="1799">
+    <property name="length">1800</property>
+    <property name="eof">pause</property>
+    <property name="resource">C:/Users/user/Desktop/Cutwright/testclips/part1_1_60-120.mp4</property>
+    <property name="mlt_service">avformat</property>
+    <property name="audio_index">1</property>
+    <property name="video_index">0</property>
+    <property name="seekable">1</property>
+    <property name="shotcut:caption">crash into the wall</property>
+    <property name="cutwright:source">testclips/part1_1_60-120.mp4</property>
+  </producer>
+  <producer id="producer2" in="0" out="1799">
+    <property name="length">1800</property>
+    <property name="eof">pause</property>
+    <property name="resource">C:/Users/user/Desktop/Cutwright/testclips/part1_1_60-120.mp4</property>
+    <property name="mlt_service">avformat</property>
+    <property name="audio_index">1</property>
+    <property name="video_index">0</property>
+    <property name="seekable">1</property>
+    <property name="shotcut:caption">he takes a bite</property>
+    <property name="cutwright:source">testclips/part1_1_60-120.mp4</property>
+  </producer>
+  <producer id="producer3" in="0" out="1799">
+    <property name="length">1800</property>
+    <property name="eof">pause</property>
+    <property name="resource">C:/Users/user/Desktop/Cutwright/testclips/part1_1_60-120.mp4</property>
+    <property name="mlt_service">avformat</property>
+    <property name="audio_index">1</property>
+    <property name="video_index">0</property>
+    <property name="seekable">1</property>
+    <property name="shotcut:caption">the word is meat</property>
+    <property name="cutwright:source">testclips/part1_1_60-120.mp4</property>
+  </producer>
+  <producer id="title1" in="0" out="68">
+    <property name="length">69</property>
+    <property name="eof">pause</property>
+    <property name="resource">0x00000000</property>
+    <property name="aspect_ratio">1</property>
+    <property name="mlt_service">color</property>
+    <property name="mlt_image_format">rgba</property>
+    <property name="shotcut:caption">the three cuts</property>
+    <filter id="titlefilter0" in="0" out="68">
+      <property name="argument">the three cuts</property>
+      <property name="geometry">0%/38%:100%x24%:100</property>
+      <property name="family">Sans</property>
+      <property name="size">72</property>
+      <property name="weight">700</property>
+      <property name="style">normal</property>
+      <property name="fgcolour">0xffffffff</property>
+      <property name="olcolour">0x000000ff</property>
+      <property name="outline">3</property>
+      <property name="halign">center</property>
+      <property name="valign">middle</property>
+      <property name="mlt_service">dynamictext</property>
+      <property name="shotcut:filter">dynamicText</property>
+    </filter>
+  </producer>
+  <producer id="title2" in="0" out="65">
+    <property name="length">66</property>
+    <property name="eof">pause</property>
+    <property name="resource">0x00000000</property>
+    <property name="aspect_ratio">1</property>
+    <property name="mlt_service">color</property>
+    <property name="mlt_image_format">rgba</property>
+    <property name="shotcut:caption">the word is meat</property>
+    <filter id="titlefilter1" in="0" out="65">
+      <property name="argument">the word is meat</property>
+      <property name="geometry">0%/68%:100%x24%:100</property>
+      <property name="family">Sans</property>
+      <property name="size">48</property>
+      <property name="weight">700</property>
+      <property name="style">normal</property>
+      <property name="fgcolour">0xffffffff</property>
+      <property name="olcolour">0x000000ff</property>
+      <property name="outline">3</property>
+      <property name="halign">center</property>
+      <property name="valign">middle</property>
+      <property name="mlt_service">dynamictext</property>
+      <property name="shotcut:filter">dynamicText</property>
+    </filter>
+  </producer>
+  <playlist id="playlist0">
+    <property name="shotcut:name">Background</property>
+    <entry producer="producer0" in="0" out="310" />
+  </playlist>
+  <playlist id="playlist1">
+    <property name="shotcut:video">1</property>
+    <property name="shotcut:name">V1</property>
+    <entry producer="producer1" in="0" out="119" />
+    <entry producer="producer2" in="1025" out="1126" />
+    <entry producer="producer3" in="1415" out="1503" />
+  </playlist>
+  <playlist id="playlist2">
+    <property name="shotcut:video">2</property>
+    <property name="shotcut:name">V2</property>
+    <blank length="27" />
+    <entry producer="title1" in="0" out="68" />
+    <blank length="96" />
+    <entry producer="title2" in="0" out="65" />
+    <blank length="53" />
+  </playlist>
+  <playlist id="playlist3">
+    <property name="shotcut:audio">1</property>
+    <property name="shotcut:name">A1</property>
+    <entry producer="producer1" in="0" out="119" />
+    <entry producer="producer2" in="1025" out="1126" />
+    <entry producer="producer3" in="1415" out="1503" />
+  </playlist>
+  <tractor id="tractor0" in="0" out="310">
+    <property name="shotcut">1</property>
+    <property name="shotcut:projectAudioChannels">2</property>
+    <property name="shotcut:projectFolder">0</property>
+    <property name="cutwright:name">demo_title</property>
+    <property name="cutwright:shotcut">26.9.27</property>
+    <property name="cutwright:mlt">7.41.0</property>
+    <track producer="playlist0" hide="audio" />
+    <track producer="playlist1" hide="audio" />
+    <track producer="playlist2" hide="audio" />
+    <track producer="playlist3" hide="video" />
+    <transition id="transition0">
+      <property name="a_track">0</property>
+      <property name="b_track">1</property>
+      <property name="mlt_service">mix</property>
+      <property name="always_active">1</property>
+      <property name="sum">1</property>
+    </transition>
+    <transition id="transition1">
+      <property name="a_track">0</property>
+      <property name="b_track">1</property>
+      <property name="mlt_service">frei0r.cairoblend</property>
+      <property name="always_active">1</property>
+      <property name="disable">1</property>
+    </transition>
+    <transition id="transition2">
+      <property name="a_track">0</property>
+      <property name="b_track">2</property>
+      <property name="mlt_service">mix</property>
+      <property name="always_active">1</property>
+      <property name="sum">1</property>
+    </transition>
+    <transition id="transition3">
+      <property name="a_track">1</property>
+      <property name="b_track">2</property>
+      <property name="mlt_service">frei0r.cairoblend</property>
+      <property name="always_active">1</property>
+    </transition>
+    <transition id="transition4">
+      <property name="a_track">0</property>
+      <property name="b_track">3</property>
+      <property name="mlt_service">mix</property>
+      <property name="always_active">1</property>
+      <property name="sum">1</property>
+    </transition>
+    <filter in="0" out="23" id="filter0">
+      <property name="mlt_service">brightness</property>
+      <property name="level">0=0;23=1</property>
+      <property name="shotcut:filter">fadeInBrightness</property>
+    </filter>
+    <filter in="0" out="23" id="filter1">
+      <property name="mlt_service">volume</property>
+      <property name="level">0=-60.0;23=0</property>
+      <property name="shotcut:filter">fadeInVolume</property>
+    </filter>
+    <filter in="281" out="310" id="filter2">
+      <property name="mlt_service">brightness</property>
+      <property name="level">0=1;29=0</property>
+      <property name="shotcut:filter">fadeOutBrightness</property>
+    </filter>
+    <filter in="281" out="310" id="filter3">
+      <property name="mlt_service">volume</property>
+      <property name="level">0=0;29=-60.0</property>
+      <property name="shotcut:filter">fadeOutVolume</property>
+    </filter>
+  </tractor>
+</mlt>

@@ -10,7 +10,7 @@ conventions are what make the file open as an editable timeline rather than a
 flattened render, so the XML is written here -- but every service name in it is
 asked of the installed Shotcut rather than assumed (see query()).
 
-The four checks at the bottom are the point of the module. A .mlt that opens is
+The checks at the bottom are the point of the module. A .mlt that opens is
 not the same as a .mlt that edits correctly:
 
   1. xml      it parses, ids are unique, every reference resolves, and the
@@ -21,6 +21,11 @@ not the same as a .mlt that edits correctly:
               the edit claims -- compared by PSNR against the source, with a
               deliberate mismatch as a control so a passing score means
               something
+  5. fade     the head and tail really are dark and the middle is not, frame
+              by frame, against the same timeline with the fade taken out
+  6. titles   the text is on screen, inside the band the plan named, on the
+              frames it was given and no others, against the same timeline
+              with the titles taken out
 
 Frame counts are integers everywhere; no timecode strings, no floats in the
 XML. "00:00:09.500" is a rounding argument waiting to happen, and the length
@@ -297,6 +302,27 @@ FADE_FLOOR_DB = -60.0      # where a fade begins and ends in sound. `volume.leve
                            # is a dB value, and -60 dB on this material is silence
                            # as far as any measurement here can tell.
 
+# --- titles -----------------------------------------------------------------
+# A title is a transparent colour producer on V2 with one `dynamictext` filter
+# on it, which is how Shotcut writes "Text: Simple": the filter draws into that
+# producer's frame and the track is composited over everything below it with
+# alpha, so the picture under the text is still there and still editable. The
+# bands are percentages of the frame, in melt's `x/y:w x h:opacity` rect form.
+TITLE_BANDS = {"top": ("0%", "8%", "100%", "24%"),
+               "middle": ("0%", "38%", "100%", "24%"),
+               "lower": ("0%", "68%", "100%", "24%")}
+TITLE_TRACK = "V2"         # the track titles live on, above V1 and below A1
+TITLE_SIZE = 64            # pixels of font height in the project's own resolution
+TITLE_FG = "0xffffffff"    # white text ...
+TITLE_OUTLINE = "0x000000ff"   # ... with a black outline, so it reads on any shot
+TITLE_OUTLINE_WIDTH = 3
+
+
+def _title_geometry(position):
+    """The rect a title is drawn into, from its band name."""
+    x, y, w, h = TITLE_BANDS[position]
+    return "%s/%s:%sx%s:100" % (x, y, w, h)
+
 
 class Project(object):
     """One editable Shotcut timeline: background, V1 for picture, A1 for sound.
@@ -319,6 +345,15 @@ class Project(object):
         self.clips = []
         self._lengths = {}
         self.fade = {"in": 0, "out": 0, "audio": True}
+        self.titles = []
+        # Leave the text off a title, keeping everything else about it -- the
+        # transparent producer, its frames on V2, the blend. The titles check
+        # renders its control this way: two files that differ by one filter
+        # element, not by a track or a compositing path. Both of those change
+        # the picture everywhere (cairo shifts colour, and melt skips a blend
+        # whose b-frame never arrives), which drowns the frames that are
+        # supposed to be silent.
+        self.no_title_text = False
 
     # -- building ---------------------------------------------------------
     def add_clip(self, source, t_in, t_out, label=""):
@@ -359,6 +394,74 @@ class Project(object):
     def length(self):
         """Timeline length in frames = the sum of the clip lengths."""
         return sum(c["frames"] for c in self.clips)
+
+    # -- titles -----------------------------------------------------------
+    def add_title(self, text, t_in, t_out, size=None, position="lower",
+                  colour=None):
+        """One text overlay, in seconds on the timeline, on its own track."""
+        return self._add_title_frames(text, self.profile.frame(t_in),
+                                      self.profile.frame(t_out) - 1,
+                                      size, position, colour)
+
+    def _add_title_frames(self, text, start, end, size=None, position="lower",
+                          colour=None):
+        """The frame half of add_title, so a control can reuse exact frames.
+
+        Frames, as everywhere else. Two titles may not overlap: they share V2,
+        and a playlist entry cannot start before the one in front of it ends,
+        so asking for that is refused here rather than written and silently
+        dropped by the compositor.
+        """
+        text = (str(text) if text is not None else "").strip()
+        if not text:
+            raise PlanError("a title with no text is not a title")
+        position = str(position or "lower").lower()
+        if position not in TITLE_BANDS:
+            raise PlanError("title position %r is not one of %s"
+                            % (position, ", ".join(sorted(TITLE_BANDS))))
+        start, end = int(start), int(end)
+        if end - start + 1 < 2:
+            raise PlanError("title %r is %d frame(s) long: at this frame rate a "
+                            "title needs at least two"
+                            % (text[:24], end - start + 1))
+        if start < 0 or end > self.length - 1:
+            raise PlanError("title %r runs frames %d-%d but the timeline is %d "
+                            "frames long" % (text[:24], start, end, self.length))
+        for other in self.titles:
+            if start <= other["at"] + other["frames"] - 1 and other["at"] <= end:
+                raise PlanError("title %r overlaps title %r on %s"
+                                % (text[:24], other["text"][:24], TITLE_TRACK))
+        title = {"producer": "title%d" % (len(self.titles) + 1),
+                 "text": text, "in": start, "out": end,
+                 "frames": end - start + 1, "at": start,
+                 "size": int(size or TITLE_SIZE), "position": position,
+                 "geometry": _title_geometry(position),
+                 "colour": str(colour or TITLE_FG)}
+        self.titles.append(title)
+        return title
+
+    def copy_titles(self, other):
+        """Another project's titles, frame for frame -- for control renders."""
+        for title in other.titles:
+            self._add_title_frames(title["text"], title["at"],
+                                   title["at"] + title["frames"] - 1,
+                                   title["size"], title["position"],
+                                   title["colour"])
+
+    def copy_fade(self, other):
+        """Another project's fade, frame for frame -- for control renders."""
+        self.fade = dict(other.fade)
+
+    def title_over(self, frame):
+        """The title that is on screen at a timeline frame, or None."""
+        for title in self.titles:
+            if title["at"] <= frame <= title["at"] + title["frames"] - 1:
+                return title
+        return None
+
+    @property
+    def has_titles(self):
+        return bool(self.titles)
 
     # -- fade -------------------------------------------------------------
     def set_fade(self, fade_in=0.0, fade_out=0.0, audio=True):
@@ -466,6 +569,38 @@ class Project(object):
                        ("cutwright:source",
                         guard.rel(clip["source"]).replace("\\", "/"))])
 
+        for index, title in enumerate(self.titles):
+            # Transparent producer + one text filter, the shape Shotcut writes
+            # for "Text: Simple". `resource=0x00000000` with an rgba image
+            # format is a frame of nothing, which is what makes the blend below
+            # put the text over the picture instead of over a black box.
+            span = str(title["frames"] - 1)
+            p = ET.SubElement(root, "producer", {"id": title["producer"],
+                                                 "in": "0", "out": span})
+            _props(p, [("length", title["frames"]),
+                       ("eof", "pause"),
+                       ("resource", "0x00000000"),
+                       ("aspect_ratio", "1"),
+                       ("mlt_service", "color"),
+                       ("mlt_image_format", "rgba"),
+                       ("shotcut:caption", title["text"][:60])])
+            # The control render is this same producer with this one element
+            # left out, so the two files composite identically and the only
+            # thing between them is the text.
+            if not self.no_title_text:
+                f = ET.SubElement(p, "filter", {"id": "titlefilter%d" % index,
+                                                "in": "0", "out": span})
+                _props(f, [("argument", title["text"]),
+                           ("geometry", title["geometry"]),
+                           ("family", "Sans"), ("size", title["size"]),
+                           ("weight", "700"), ("style", "normal"),
+                           ("fgcolour", title["colour"]),
+                           ("olcolour", TITLE_OUTLINE),
+                           ("outline", TITLE_OUTLINE_WIDTH),
+                           ("halign", "center"), ("valign", "middle"),
+                           ("mlt_service", "dynamictext"),
+                           ("shotcut:filter", "dynamicText")])
+
         bglist = ET.SubElement(root, "playlist", {"id": "playlist0"})
         _props(bglist, [("shotcut:name", "Background")])
         ET.SubElement(bglist, "entry", {"producer": "producer0", "in": "0",
@@ -473,7 +608,25 @@ class Project(object):
 
         v1 = ET.SubElement(root, "playlist", {"id": "playlist1"})
         _props(v1, [("shotcut:video", "1"), ("shotcut:name", "V1")])
-        a1 = ET.SubElement(root, "playlist", {"id": "playlist2"})
+        v2 = None
+        if self.titles:
+            v2 = ET.SubElement(root, "playlist", {"id": "playlist2"})
+            _props(v2, [("shotcut:video", "2"), ("shotcut:name", TITLE_TRACK)])
+            # A title sits at a frame, so the track needs blanks for the gaps.
+            # Without them every later title would slide to the front.
+            cursor = 0
+            for title in self.titles:
+                if title["at"] > cursor:
+                    ET.SubElement(v2, "blank",
+                                  {"length": str(title["at"] - cursor)})
+                ET.SubElement(v2, "entry",
+                              {"producer": title["producer"], "in": "0",
+                               "out": str(title["frames"] - 1)})
+                cursor = title["at"] + title["frames"]
+            if cursor < length:
+                ET.SubElement(v2, "blank", {"length": str(length - cursor)})
+        a1 = ET.SubElement(root, "playlist",
+                           {"id": "playlist2" if v2 is None else "playlist3"})
         _props(a1, [("shotcut:audio", "1"), ("shotcut:name", "A1")])
         for clip in self.clips:
             for playlist in (v1, a1):
@@ -493,16 +646,21 @@ class Project(object):
                                          "hide": "audio"})
         ET.SubElement(tractor, "track", {"producer": "playlist1",
                                          "hide": "audio"})
-        ET.SubElement(tractor, "track", {"producer": "playlist2",
+        if v2 is not None:
+            ET.SubElement(tractor, "track", {"producer": "playlist2",
+                                             "hide": "audio"})
+        ET.SubElement(tractor, "track", {"producer": "playlist3" if v2 is not None
+                                                    else "playlist2",
                                          "hide": "video"})
 
         made = [0]
 
-        def transition(service, b_track, **extra):
+        def transition(service, b_track, a_track=None, **extra):
             el = ET.SubElement(tractor, "transition",
                                {"id": "transition%d" % made[0]})
             made[0] += 1
-            pairs = [("a_track", "0"), ("b_track", str(b_track)),
+            pairs = [("a_track", str(b_track - 1 if a_track is None else a_track)),
+                     ("b_track", str(b_track)),
                      ("mlt_service", service), ("always_active", "1")]
             pairs += sorted(extra.items())
             return _props(el, pairs)
@@ -512,9 +670,32 @@ class Project(object):
         # sits straight on the background, so compositing it is cost with no
         # visible gain -- measured here at 6.9 s vs 4.5 s for 60 frames, and
         # the two differ by 33 dB, i.e. cairo shifts the colour slightly.
-        transition("mix", 1, sum="1")
+        #
+        # V2 is the opposite case: its whole job is alpha, so its blend has to
+        # run. Without it the transparent producer wins the frame and the
+        # picture goes black wherever there is no text.
+        #
+        # The a-frame has to be the track *immediately below*, not the
+        # background. Shotcut writes a_track=0 everywhere, but MLT 7.41 as
+        # built here composites that onto the background frame instead of onto
+        # the running picture: a three-track probe (black / green / red) with
+        # composite a=0 b=2 changed nothing at all, while a=1 b=2 put red over
+        # green in the requested half of the frame. Same file, same transition,
+        # only a_track differs. With a_track=1 the demo's titles appear (centre
+        # band YMAX 195 -> 250) and the frames that carry no title stay
+        # identical to the control render, so blanks in the title track are
+        # harmless.
+        # `mix` sums each track's audio into the background frame, and that is
+        # where Shotcut puts it: a_track=0 on every one of these. Audio and
+        # picture blend differently -- a video blend wants the running picture
+        # as its a-frame, an audio mix wants the accumulating sum -- so these
+        # stay at the background and the default below is for the blends.
+        transition("mix", 1, a_track=0, sum="1")
         transition("frei0r.cairoblend", 1, disable="1")
-        transition("mix", 2, sum="1")
+        if v2 is not None:
+            transition("mix", 2, a_track=0, sum="1")
+            transition("frei0r.cairoblend", 2)
+        transition("mix", 3 if v2 is not None else 2, a_track=0, sum="1")
 
         for index, (attrs, pairs) in enumerate(self._fade_filters()):
             filter_el = ET.SubElement(tractor, "filter",
@@ -708,7 +889,18 @@ def check_lengths(path, clips, profile):
         name = (playlist.findtext("property[@name='shotcut:name']")
                 or playlist.get("id"))
         frames = 0
-        for entry in playlist.findall("entry"):
+        for entry in playlist:
+            if entry.tag == "blank":
+                # A title track is mostly gap, and the gap is as much a part of
+                # the track's length as the entries are: counting only entries
+                # would report V2 short by every frame with no text on it.
+                try:
+                    frames += int(entry.get("length"))
+                except (TypeError, ValueError):
+                    problems.append("%s has a blank without a length" % name)
+                continue
+            if entry.tag != "entry":
+                continue
             try:
                 start, end = int(entry.get("in")), int(entry.get("out"))
             except (TypeError, ValueError):
@@ -954,6 +1146,16 @@ def check_render(project, path, work_dir, width=270, crf=34, samples=3):
     for index in _sample_clips(project.clips, samples):
         clip = project.clips[index]
         offset = clip["frames"] // 2
+        # A title is drawn over the picture, so a frame under one is no longer
+        # a frame of the source. Step along the clip to a sample the titles
+        # leave alone -- the check is about which source frames are on screen,
+        # and it should not be reading text it put there itself.
+        for delta in (0, 8, -8, 16, -16, 24, -24, 32, -32):
+            candidate = clip["frames"] // 2 + delta
+            if (0 <= candidate < clip["frames"]
+                    and not project.title_over(clip["at"] + candidate)):
+                offset = candidate
+                break
         at = (clip["at"] + offset) / fps
         shot = os.path.join(work_dir, "render_%d.png" % index)
         if not _frame(out_mp4, at, shot, size):
@@ -1101,6 +1303,8 @@ def check_fade(project, path, work_dir, proof=None, wav=None, width=140, crf=36)
     for clip in project.clips:
         plain.add_clip(clip["source"], clip["in"] / fps,
                        (clip["out"] + 1) / fps, clip["label"])
+    plain.copy_titles(project)     # the fade has to darken text too, so the
+                                  # control keeps the titles and drops only the fade
     plain_path = plain.write(os.path.join(work_dir, plain.name + ".mlt"))
     plain_mp4 = os.path.join(work_dir, plain.name + ".mp4")
     if os.path.isfile(plain_mp4):
@@ -1202,6 +1406,196 @@ def check_fade(project, path, work_dir, proof=None, wav=None, width=140, crf=36)
 
 
 # ---------------------------------------------------------------------------
+# check 6: the text is on screen, in the band the plan named, only when it says
+# ---------------------------------------------------------------------------
+TITLE_PSNR_MIN = 15.0     # a title changes a lot of pixels ...
+TITLE_PSNR_MAX = 45.0     # ... but the shot under it is still most of the frame
+TITLE_QUIET_PSNR = 50.0   # outside its window the two renders are one picture
+TITLE_BAND_MARGIN = 2.5   # dB the named band has to change more than the frame
+TITLE_MIN_LUMA = 20.0     # mean luma of the shot under the text, of 255
+
+
+def _crop(src, out, box):
+    """Cut a still down to a rectangle of itself, in pixels."""
+    x, y, w, h = box
+    r = probe.run(["ffmpeg", "-y", "-loglevel", "error", "-i", src,
+                   "-frames:v", "1", "-vf", "crop=%d:%d:%d:%d" % (w, h, x, y),
+                   out], timeout=180)
+    return r.returncode == 0 and os.path.isfile(out)
+
+
+def _still_luma(png):
+    """Mean luma of one still, 0-255."""
+    r = probe.run(["ffmpeg", "-hide_banner", "-nostdin", "-i", png, "-vf",
+                   "signalstats,metadata=print:file=-", "-f", "null", "-"],
+                  timeout=180)
+    found = re.findall(r"YAVG=([0-9.]+)", (r.stdout or "") + (r.stderr or ""))
+    return float(found[-1]) if found else None
+
+
+def check_titles(project, path, work_dir, width=270):
+    """6. Text on screen, in the band the plan chose, only inside its window.
+
+    Both sides are rendered by this writer: the project as planned, and the
+    same timeline with the text filters left off. Frame n of one against frame
+    n of the other is then the text and nothing else -- same footage, same
+    producer, same track, same compositing path, same encoder -- so nothing
+    here has to guess what the shot looked like. Every other way of building
+    the control changes the picture everywhere: dropping V2 drops the blend
+    with it, and melt skips a blend whose b-frame never arrives, while cairo
+    on its own shifts colour slightly; an empty V2 is a third path again. Any
+    of those moves every frame in the timeline, which is indistinguishable from
+    a title that never starts or stops on time. The two renders are lossless
+    for the same reason: a lossy codec carries a bright title a little way into
+    the frames after it.
+    Per title it asserts three things: the frame changed (a title is visible at
+    all), the change sits in the band the plan named rather than spread over
+    the whole frame (it is where it was asked to be), and the frames just
+    outside the window are untouched (it starts and stops on the frames the
+    plan gave it). A title written into the file but never drawn fails the
+    first; one drawn over the whole frame fails the second; one at the wrong
+    time fails the third.
+    """
+    if not project.has_titles:
+        return _result("titles", False,
+                       "the plan has no titles, so there is nothing to measure here")
+
+    fps = project.profile.fps
+    guard.ensure_dir(work_dir)
+    problems, rows, quiet = [], [], []
+
+    # Both sides are rendered here, lossless. A lossy codec smears a frame that
+    # did change into the frames after it -- a title is bright, the frames just
+    # past its out point then read 33 dB instead of identical, and a check that
+    # cannot tell drift from a late title is no check. crf=0 costs about 8 MB
+    # and a few seconds a side at this width.
+    planned_mp4 = os.path.join(work_dir, project.name + "_titles.mp4")
+    if os.path.isfile(planned_mp4):
+        os.remove(planned_mp4)
+    ok, detail, _info = render_video(project, path, planned_mp4, width=width,
+                                     crf=0)
+    if not ok:
+        return _result("titles", False, "no picture to measure: " + detail)
+
+    plain = Project(project.name + "_no_titles", project.profile, project.shotcut,
+                    project.mlt, "same timeline, no titles")
+    for clip in project.clips:
+        plain.add_clip(clip["source"], clip["in"] / fps,
+                       (clip["out"] + 1) / fps, clip["label"])
+    plain.copy_fade(project)       # only the titles come out, so the fade stays
+    plain.no_title_text = True     # ...and so does the text's producer and track
+    plain_path = plain.write(os.path.join(work_dir, plain.name + ".mlt"))
+    plain_mp4 = os.path.join(work_dir, plain.name + ".mp4")
+    if os.path.isfile(plain_mp4):
+        os.remove(plain_mp4)
+    ok, detail, _info = render_video(plain, plain_path, plain_mp4, width=width,
+                                     crf=0)
+    if not ok:
+        return _result("titles", False,
+                       "no control picture to compare against: " + detail)
+
+    size = (int(width), int(round(width * project.profile.height /
+                                  float(project.profile.width) / 2.0)) * 2)
+
+    def at(label, frame, box=None):
+        """PSNR between the two renders at one frame: whole frame, or one band."""
+        a = os.path.join(work_dir, "title_a.png")
+        b = os.path.join(work_dir, "title_b.png")
+        for stale in (a, b):
+            if os.path.isfile(stale):
+                os.remove(stale)
+        if not (_frame(planned_mp4, frame / fps, a, size)
+                and _frame(plain_mp4, frame / fps, b, size)):
+            problems.append("%s: could not pull frame %d from both renders"
+                            % (label, frame))
+            return None
+        if box:
+            ca = os.path.join(work_dir, "title_a_band.png")
+            cb = os.path.join(work_dir, "title_b_band.png")
+            if not (_crop(a, ca, box) and _crop(b, cb, box)):
+                problems.append("%s: could not crop the title band" % label)
+                return None
+            a, b = ca, cb
+        return _psnr(a, b)
+
+    for index, title in enumerate(project.titles):
+        band = TITLE_BANDS[title["position"]]
+        top, down = band[1], band[3]
+        box = (0,
+               int(round(size[1] * float(top.rstrip("%")) / 100.0)),
+               size[0],
+               max(int(round(size[1] * float(down.rstrip("%")) / 100.0)), 2))
+        start = title["at"]
+        end = start + title["frames"] - 1
+        for label, frame in (("first frame", min(start + 1, end)),
+                             ("middle frame", (start + end) // 2),
+                             ("last frame", max(end - 1, start))):
+            whole = at("title %d %s" % (index + 1, label), frame)
+            if whole is None:
+                continue
+            band_db = at("title %d %s band" % (index + 1, label), frame, box)
+            rows.append({"title": index + 1, "what": label, "frame": frame,
+                         "whole_psnr": round(whole, 2),
+                         "band_psnr": None if band_db is None else round(band_db, 2)})
+            if whole < TITLE_PSNR_MIN:
+                problems.append("title %d: the %s (frame %d) is %.1f dB from the "
+                                "same frame without it -- the picture was replaced"
+                                % (index + 1, label, frame, whole))
+            elif whole > TITLE_PSNR_MAX:
+                problems.append("title %d: the %s (frame %d) is %.1f dB from the "
+                                "same frame without it, i.e. nothing visible "
+                                "changed" % (index + 1, label, frame, whole))
+            if band_db is not None and band_db >= whole - TITLE_BAND_MARGIN:
+                problems.append("title %d: the %s changes the whole frame and its "
+                                "%s band by about the same (%.1f vs %.1f dB), so "
+                                "the text is not confined to that band"
+                                % (index + 1, label, title["position"], band_db,
+                                   whole))
+
+        # Outside the window nothing may be drawn: one frame before the title
+        # starts and one after it ends, unless another title is on screen there.
+        for frame in (start - 2, end + 1):
+            if not 0 <= frame < project.length:
+                continue
+            if project.title_over(frame) not in (None, title):
+                continue
+            value = at("title %d quiet frame" % (index + 1), frame)
+            if value is None:
+                continue
+            quiet.append({"title": index + 1, "frame": frame,
+                          "whole_psnr": round(value, 2)})
+            if value < TITLE_QUIET_PSNR:
+                problems.append("title %d is on screen at frame %d (%.1f dB from "
+                                "the same frame without it), outside its window "
+                                "%d-%d" % (index + 1, frame, value, start, end))
+
+        # A title over a black frame would pass everything above and still be
+        # wrong: the shot has to be there under the text.
+        under, mid = os.path.join(work_dir, "title_under.png"), (start + end) // 2
+        if _frame(plain_mp4, mid / fps, under, size):
+            luma = _still_luma(under)
+            if luma is not None and luma < TITLE_MIN_LUMA:
+                problems.append("the shot under title %d measures %.1f of 255 "
+                                "luma at frame %d: the text is over a black frame"
+                                % (index + 1, luma, mid))
+
+    detail = "; ".join(
+        "title %d frames %d-%d: %s"
+        % (index + 1, title["at"], title["at"] + title["frames"] - 1,
+           ", ".join("%s band %.1f / frame %.1f dB"
+                     % (row["what"], row["band_psnr"], row["whole_psnr"])
+                     for row in rows if row["title"] == index + 1))
+        for index, title in enumerate(project.titles))
+    if quiet:
+        detail += ", clear outside the window at frame(s) %s" % ", ".join(
+            "%d (%.1f dB)" % (row["frame"], row["whole_psnr"]) for row in quiet)
+    if problems:
+        return _result("titles", False, "; ".join(problems) + " [" + detail + "]",
+                       samples=rows + quiet)
+    return _result("titles", True, detail, samples=rows + quiet)
+
+
+# ---------------------------------------------------------------------------
 # plan -> project -> checks, in one place so the CLI stays thin
 # ---------------------------------------------------------------------------
 def _resolve(raw, base):
@@ -1250,14 +1644,39 @@ def load_plan(path):
         if fade[key] < 0:
             raise PlanError("fade %s is negative (%.3f s)" % (key, fade[key]))
     fade["audio"] = bool(raw_fade.get("audio", True))
+    raw_titles = plan.get("titles") or []
+    if not isinstance(raw_titles, list):
+        raise PlanError("\"titles\" has to be a list of "
+                        "{\"text\": ..., \"in\": 0.5, \"out\": 2.5} objects")
+    titles = []
+    for index, raw in enumerate(raw_titles):
+        if not isinstance(raw, dict) or not str(raw.get("text") or "").strip():
+            raise PlanError("title %d has no \"text\"" % index)
+        try:
+            start, end = float(raw.get("in", 0.0)), float(raw.get("out", 0.0))
+        except (TypeError, ValueError):
+            raise PlanError("title %d has a non-numeric in/out" % index)
+        if end <= start:
+            raise PlanError("title %d: out (%s) has to come after in (%s)"
+                            % (index, end, start))
+        try:
+            size = int(raw.get("size") or 0)
+        except (TypeError, ValueError):
+            raise PlanError("title %d has a non-numeric size: %r"
+                            % (index, raw.get("size")))
+        titles.append({"text": str(raw["text"]).strip(), "in": start, "out": end,
+                       "size": size or None,
+                       "position": str(raw.get("position") or "lower"),
+                       "colour": str(raw.get("colour") or "").strip() or None})
     name = str(plan.get("name") or
                os.path.splitext(os.path.basename(path))[0])
     return {"name": name, "title": str(plan.get("title") or ""),
-            "clips": clips, "fade": fade, "path": os.path.abspath(path)}
+            "clips": clips, "fade": fade, "titles": titles,
+            "path": os.path.abspath(path)}
 
 
 def build(plan_path, out_root=None, width=270, crf=34, samples=3, checks=None):
-    """Plan -> .mlt -> the four checks -> a record of all of it on disk.
+    """Plan -> .mlt -> the checks that apply -> a record of all of it on disk.
 
     `checks` can name a subset while a feature is being added, so a half-built
     feature does not have to pass every gate to be looked at. A check left out
@@ -1271,6 +1690,9 @@ def build(plan_path, out_root=None, width=270, crf=34, samples=3, checks=None):
     if plan["fade"]["in"] or plan["fade"]["out"]:
         project.set_fade(plan["fade"]["in"], plan["fade"]["out"],
                          plan["fade"]["audio"])
+    for title in plan["titles"]:
+        project.add_title(title["text"], title["in"], title["out"],
+                          title["size"], title["position"], title["colour"])
     folder = guard.ensure_dir(os.path.join(out_root or guard.PROJECTS,
                                           project.name))
     path = project.write(os.path.join(folder, project.name + ".mlt"))
@@ -1278,6 +1700,8 @@ def build(plan_path, out_root=None, width=270, crf=34, samples=3, checks=None):
     order = ["xml", "effects", "lengths", "render"]
     if project.has_fade:
         order.append("fade")
+    if project.has_titles:
+        order.append("titles")
     wanted = [c.lower() for c in (checks or order)]
     unknown = [name for name in wanted if name not in order]
     if unknown:
@@ -1302,6 +1726,9 @@ def build(plan_path, out_root=None, width=270, crf=34, samples=3, checks=None):
         results.append(check_fade(project, path, os.path.join(folder, "check"),
                                   proof=rendered.get("mp4"), wav=rendered.get("wav"),
                                   width=width, crf=crf))
+    if "titles" in wanted:
+        results.append(check_titles(project, path, os.path.join(folder, "check"),
+                                    width=width))
 
     result = {"plan": plan, "project": project, "path": path, "folder": folder,
               "checks": results, "skipped": skipped}
@@ -1313,6 +1740,9 @@ def build(plan_path, out_root=None, width=270, crf=34, samples=3, checks=None):
         "clips": [{"source": guard.rel(c["source"]), "in": c["in"],
                    "out": c["out"], "frames": c["frames"],
                    "label": c["label"]} for c in project.clips],
+        "titles": [{"text": t["text"], "in": t["in"], "out": t["out"],
+                    "frames": t["frames"], "position": t["position"],
+                    "size": t["size"]} for t in project.titles],
         "checks": results})
     guard.write_text(os.path.join(folder, "digest.txt"), _digest(result))
     return result
@@ -1349,6 +1779,14 @@ def _digest(result):
                      % (index, clip["producer"], guard.rel(clip["source"]),
                         clip["in"] / fps, (clip["out"] + 1) / fps,
                         clip["in"], clip["out"], clip["frames"], clip["label"]))
+    if project.titles:
+        lines += ["", "titles"]
+        for index, title in enumerate(project.titles):
+            lines.append("  %d  %-11s %-29r frames %d-%d  %d f  %s, %d px, %s"
+                         % (index, title["producer"], title["text"],
+                            title["at"], title["at"] + title["frames"] - 1,
+                            title["frames"], title["position"], title["size"],
+                            title["colour"]))
     lines.append("")
     lines.append("checks")
     for check in result["checks"]:

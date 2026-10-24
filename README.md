@@ -3,11 +3,12 @@
 Agent control of a Desktop video-editing fork: perception first, editing second.
 
 The half that writes an edit today is `build`: a JSON list of cuts goes in, a
-Shotcut `.mlt` project comes out, and five checks prove the file is what it
+Shotcut `.mlt` project comes out, and six checks prove the file is what it
 claims to be -- the XML resolves, every effect name exists in the installed
 Shotcut, the track lengths add up, a small render really shows the frames the
-edit asked for, and a fade (if the plan asks for one) really darkens the
-picture and the sound at the ends it was asked for.
+edit asked for, a fade (if the plan asks for one) really darkens the picture and
+the sound at the ends it was asked for, and a title really appears in the band
+and frames the plan gave it.
 
 This is a **self-contained fork**. All copied code and text lives in `vendor/`
 with a SHA256 manifest. Footage is never copied -- source files are referenced
@@ -30,8 +31,9 @@ them is mine to redistribute:
 them at the paths above, relative to this folder: `.gitignore` only keeps them
 out of git, nothing in the code assumes a different location.
 `python -m cutwright doctor` lists what is missing and what stops working
-without it. The demo project is committed without its `check\` folder (proof
-renders, 5 MB); `build` recreates those.
+without it. The demo projects are committed without their `check\` folders (proof
+renders and the lossless pairs the title check compares, tens of MB); `build`
+recreates those.
 
 ## The one invariant
 
@@ -67,7 +69,7 @@ Cutwright\
     moments.py      transcript -> beats -> ranked candidate moments
     frames.py       frame verification: grade picks against pictures
     transcribe.py   whisper.cpp fallback: produce a transcript, gate it too
-    mlt.py          plan -> Shotcut .mlt, then the five checks on the file
+    mlt.py          plan -> Shotcut .mlt, then the six checks on the file
     cli.py          doctor / probe / subs / moments / verify / transcribe / build
   projects\<name>\   plan.json + <name>.mlt + checks.json + digest.txt + check\
   out\<video>\      per-video analysis output
@@ -149,6 +151,7 @@ and then checks the file it just wrote:
 | `lengths` | every track is exactly as long as the tractor, no entry overruns its producer, and the clip lengths add up to the timeline |
 | `render` | a small render really shows the source frames the edit claims: PSNR against the same frames rendered through the same pipeline, plus the audio level per clip |
 | `fade` | when the plan asks for a fade: rendered twice, with and without it, frame against frame -- black at the outer frame, full just outside, an eased ramp in the middle, untouched in between, and the sound measured the same way |
+| `titles` | when the plan asks for a title: rendered twice, with and without the text filters, frame against frame -- the frame changed, the change is inside the band the plan named, and the frames just outside the window are identical |
 
 The render check compares against a **reference rendered by this same writer**
 rather than against the source decoded by ffmpeg. Measured on a clip that was
@@ -225,6 +228,67 @@ fade that is written into the file but applied to the wrong frames. Measured on
 0.99, frame 279 at 1.00, the middle of the fade out at 0.45, the last frame at
 0.01, and 0.99-1.00 at three points inside the body.
 
+### Titles
+
+A plan can put text on screen for a stretch of frames, in one of three bands:
+
+```json
+{
+  "name": "demo_title",
+  "titles": [
+    {"text": "the three cuts",   "in": 0.9, "out": 3.2, "size": 72, "position": "middle"},
+    {"text": "the word is meat", "in": 6.4, "out": 8.6, "size": 48, "position": "lower"}
+  ]
+}
+```
+
+`position` is `top`, `middle` or `lower` -- bands of 24% of the frame height at
+8%, 38% and 68% down. White text, black outline, weight 700, centred in the band.
+`size` is pixels of font height in the project's own resolution, default 64.
+
+Each title becomes its own producer on a **V2** track: a `color` producer at
+`0x00000000` (fully transparent, `mlt_image_format=rgba`) with one
+`dynamictext` filter on it -- which is exactly how Shotcut writes "Text: Simple".
+The filter draws into that transparent frame and the track is composited over V1
+with alpha, so the picture underneath is untouched and still editable, and the
+gaps between titles are plain `<blank>`s on the track. Two titles may not overlap.
+
+One melt behaviour is load-bearing here, and it cost the longest to find: **the
+`a_track` of a blend has to be the track immediately below, not the
+background.** Shotcut writes `a_track=0` for every transition in its own files,
+this writer copied that, and the titles were invisible -- silently, with no error
+from melt. A three-track probe settled it: black on V0, green on V1, red on V2,
+`composite` from `a=0, b=2` changed nothing at all, while `a=1, b=2` put red over
+green in the half of the frame it was asked for. Same file, same transition, one
+attribute different. The blends on this timeline now default to `a_track =
+b_track - 1`. The audio `mix` transitions are the exception and keep `a_track=0`,
+because audio sums into the background frame rather than onto the picture below
+-- only cairoblend needs the running track as its a-frame. With the blend fixed
+the demo's titles appear (centre band YMAX 195 -> 250).
+
+The `titles` check renders the project **twice from this writer**, lossless, and
+compares frame n against frame n. The control is the same timeline with only the
+`dynamictext` element left out: same footage, same transparent producer, same
+track, same compositing path, same encoder, so the difference between the two is
+the text and nothing else. Every other way of building that control was measured
+and rejected -- dropping V2 drops the blend with it and moves *every* frame in
+the timeline (cairo alone shifts colour by about 33 dB), and an empty V2 is a
+third compositing path again; either one drowns a title that starts or stops on
+the wrong frame. Lossless for the same reason: under H.264, a bright title
+carries into the frames just after it and they read 33 dB instead of identical.
+
+Per title it asserts three things. The frame changed at all (`15 dB < PSNR <
+45 dB`: text is white on a dark shot, so it moves a lot of pixels but the shot
+under it is still most of the frame). The change sits in the band the plan named
+rather than spread over the frame -- the named band's PSNR has to be at least
+2.5 dB lower than the whole frame's. And the frames one past each end are
+*identical* (PSNR above 50 dB, in practice inf), while the frames inside the body
+stay under the ceiling. A title written into the file but never drawn fails the
+first, one drawn over the whole frame fails the second, one at the wrong time
+fails the third. Measured on `demo_title`: 29.5 / 26.2 / 26.8 dB whole-frame at
+the first, middle and last frame of title 1 with 23.3 / 20.0 / 20.6 dB in its
+band, and inf at frames 25, 96, 190 and 258.
+
 ## Testing rules
 
 Never test on a full episode or a long file. Every test uses a short sample cut
@@ -270,6 +334,7 @@ python -m cutwright transcribe "C:\path\to\clip.mp4" --subs "C:\path\to\film.srt
 python -m cutwright transcribe "C:\path\to\clip.mp4" --fresh   # ignore the cache
 python -m cutwright build   "projects\demo_cuts\plan.json"
 python -m cutwright build   "projects\demo_fade\plan.json"
+python -m cutwright build   "projects\demo_title\plan.json"
 python -m cutwright build   "projects\demo_cuts\plan.json" --width 320 --crf 30
 python -m cutwright build   "projects\demo_cuts\plan.json" --checks xml,effects
 ```
@@ -290,7 +355,9 @@ A plan is just the cuts, in order, in seconds (`out` exclusive):
 ```
 
 `fade` is optional and applies to the whole program, picture and sound together
-(`"audio": false` fades the picture only). Seconds, converted to frames once.
+(`"audio": false` fades the picture only). `titles` is optional too and is a list
+of `{"text", "in", "out", "size", "position"}` -- see [Titles](#titles). Both are
+seconds, converted to frames once.
 
 `source` is resolved against the fork root first, then against the plan's own
 folder. `build` writes `<name>.mlt`, `checks.json` and `digest.txt` into
@@ -306,19 +373,19 @@ exits 3 instead of guessing.
 
 | piece | status |
 |---|---|
-| title text | not built -- `dynamictext`, `qtext` and `text` are all confirmed present |
-| transition between two clips | not built -- `luma`, `mix` and `composite` are all confirmed present |
+| transition between two clips | not built -- `luma`, `mix` and `composite` are all confirmed present; `transition()` already takes any of them |
 | music dipping under the voice | not built -- a second audio track with keyframed `volume` |
 | planner: transcript + frames -> plan | not built -- the pieces exist separately; nothing joins them yet |
 
 Nothing gets installed without approval. Shotcut was installed on explicit
 approval; it is only unpacked, never launched as a GUI by this tool. `build` has
-written `projects\demo_cuts\demo_cuts.mlt` (three cuts, no fade) and
-`projects\demo_fade\demo_fade.mlt` (the same three cuts under a 0.8 s fade in
-and a 1.0 s fade out, picture and sound), and all five checks pass on both.
-`demo_cuts` has been opened in the Shotcut GUI: three clips on V1 with their
-labels, three on A1 with waveforms, ruler reading `00:00:10.377`. `demo_fade`
-has not been opened by hand yet -- what is proven about it is what the checks
-measure: melt renders it to the right frames, the ramp is where the plan asked
-for it, the sound follows, the XML is well formed, and every effect name in it
-exists in this Shotcut.
+written `projects\demo_cuts\demo_cuts.mlt` (three cuts, no fade),
+`projects\demo_fade\demo_fade.mlt` (the same three cuts under a 0.8 s fade in and
+a 1.0 s fade out, picture and sound) and `projects\demo_title\demo_title.mlt`
+(the same three cuts, the fade, and two titles on V2), and all six checks pass on
+all three. `demo_cuts` has been opened in the Shotcut GUI: three clips on V1 with
+their labels, three on A1 with waveforms, ruler reading `00:00:10.377`.
+`demo_fade` and `demo_title` have not been opened by hand yet -- what is proven
+about them is what the checks measure: melt renders them to the right frames, the
+ramp and the text are where the plan asked for them, the sound follows, the XML
+is well formed, and every effect name in them exists in this Shotcut.
