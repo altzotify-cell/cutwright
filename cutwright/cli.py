@@ -7,7 +7,7 @@ Steps:
   moments  Transcript -> ranked candidate moments + agent digest
   verify   Grade picks against frames: verified / retimed / replaced
   transcribe  whisper.cpp fallback: produce a transcript, then gate it
-  build    Plan -> Shotcut .mlt, then the four checks on the file itself
+  build    Plan -> Shotcut .mlt, then the checks on the file itself
 
 Every step is dry by default and writes only inside this folder.
 """
@@ -679,8 +679,8 @@ def build_parser():
     p.add_argument("--samples", type=int, default=3,
                    help="how many clips to compare frames for (default 3)")
     p.add_argument("--checks", metavar="LIST",
-                   help="subset of xml,effects,lengths,render to run "
-                        "(default: all four)")
+                   help="subset of xml,effects,lengths,render,fade to run "
+                        "(default: all of them; fade only when the plan has one)")
     p.set_defaults(func=cmd_build)
 
     p = sub.add_parser("transcribe",

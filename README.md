@@ -187,14 +187,6 @@ Three melt behaviours are worth knowing, all measured rather than guessed:
   the proof and passes `-profile <file>`. This stayed invisible for as long as it
   did because both sides of every comparison were rendered the same wrong way;
   it surfaced only when a fade had to line up with a frame number.
-* **melt ignores the project's own `<profile>` element** unless `-profile` is
-  passed on the command line, and silently renders at 25 fps instead. Everything
-  this writer computes is a frame index into the profile it wrote, so a proof
-  render at 25 fps samples frames 20% late -- a cut at source frame 377 showed up
-  as render frame 63 instead of 77, and a fade that ended on frame 310 appeared
-  to start black at frame 275. `build` now writes the profile to a `.prof` beside
-  each render and passes `-profile`, which moved those renders to 30 fps and the
-  cut to frame 76.
 
 ### Fade
 
@@ -213,10 +205,10 @@ follows the picture by default:
 
 That is two animated filters on the tractor: `brightness` ramps `level` 0 -> 1
 for the picture, `volume` ramps `level` -60 dB -> 0 dB for the sound, both
-keyframed in frames against the project profile (24 in, 30 out on a 30 fps
-timeline), so the ramp is the length the plan asked for and not a length melt
-picked. The filters live on the tractor, not on the clips: a producer-level
-filter applies to that one source and does nothing to the assembled edit.
+keyframed in frames against the project profile (24 in, 30 out at 29.97 fps),
+so the ramp is the length the plan asked for and not a length melt picked. The
+filters live on the tractor, not on the clips: a producer-level `<filter>` in
+this file shape does nothing at all -- measured, not assumed.
 
 The `fade` check renders the project twice -- once as written, once with the
 fade removed by this same writer -- and divides their mean luma frame by frame,

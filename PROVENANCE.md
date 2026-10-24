@@ -117,7 +117,7 @@ later.
 | file | bytes | sha256 | note |
 |---|---|---|---|
 | `projects\demo_cuts\demo_cuts.mlt` | 4,724 | `4234355fdfdb4a6f6f788eec5efb0c502caa9eaec845f89a713039e5b24fe49e` | 3 clips from `testclips\part1_1_60-120.mp4`, 311 frames, Shotcut 26.9.27 / MLT 7.41.0 recorded inside. Two independent builds of the same plan are byte-identical, so the hash is a real fingerprint of the edit |
-| `projects\demo_fade\demo_fade.mlt` | 5,636 | `ad9335d181d258b18a2bc604d3b947b66ab3c0df1f9f8ce85e034d1e4af00297` | the same three cuts under a 0.8 s fade in and a 1.0 s fade out (24 and 30 frames on the timeline's own 30 fps), picture and sound. Two animated filters on the tractor, nothing else changed |
+| `projects\demo_fade\demo_fade.mlt` | 5,636 | `ad9335d181d258b18a2bc604d3b947b66ab3c0df1f9f8ce85e034d1e4af00297` | the same three cuts under a 0.8 s fade in and a 1.0 s fade out (24 and 30 frames at the timeline's own 29.97 fps), picture and sound. Two animated filters on the tractor, nothing else changed |
 
 The fade commit did **not** move `demo_cuts`' hash: the profile fix it carries
 changed how renders are invoked (`-profile`), not what the writer emits. The
