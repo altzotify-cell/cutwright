@@ -1,0 +1,28 @@
+{
+  "name": "demo_fade",
+  "title": "Cutwright demo: the three cuts, opening from black and closing to black",
+  "fade": {
+    "in": 0.8,
+    "out": 1.0
+  },
+  "clips": [
+    {
+      "source": "testclips/part1_1_60-120.mp4",
+      "in": 0.0,
+      "out": 4.0,
+      "label": "crash into the wall"
+    },
+    {
+      "source": "testclips/part1_1_60-120.mp4",
+      "in": 34.2,
+      "out": 37.6,
+      "label": "he takes a bite"
+    },
+    {
+      "source": "testclips/part1_1_60-120.mp4",
+      "in": 47.2,
+      "out": 50.2,
+      "label": "the word is meat"
+    }
+  ]
+}

@@ -3,10 +3,11 @@
 Agent control of a Desktop video-editing fork: perception first, editing second.
 
 The half that writes an edit today is `build`: a JSON list of cuts goes in, a
-Shotcut `.mlt` project comes out, and four checks prove the file is what it
+Shotcut `.mlt` project comes out, and five checks prove the file is what it
 claims to be -- the XML resolves, every effect name exists in the installed
-Shotcut, the track lengths add up, and a small render really shows the frames
-the edit asked for.
+Shotcut, the track lengths add up, a small render really shows the frames the
+edit asked for, and a fade (if the plan asks for one) really darkens the
+picture and the sound at the ends it was asked for.
 
 This is a **self-contained fork**. All copied code and text lives in `vendor/`
 with a SHA256 manifest. Footage is never copied -- source files are referenced
@@ -66,7 +67,7 @@ Cutwright\
     moments.py      transcript -> beats -> ranked candidate moments
     frames.py       frame verification: grade picks against pictures
     transcribe.py   whisper.cpp fallback: produce a transcript, gate it too
-    mlt.py          plan -> Shotcut .mlt, then the four checks on the file
+    mlt.py          plan -> Shotcut .mlt, then the five checks on the file
     cli.py          doctor / probe / subs / moments / verify / transcribe / build
   projects\<name>\   plan.json + <name>.mlt + checks.json + digest.txt + check\
   out\<video>\      per-video analysis output
@@ -147,6 +148,7 @@ and then checks the file it just wrote:
 | `effects` | every `mlt_service` is a name `melt -query` reports -- nothing invented (674 filters / 59 transitions / 42 producers on this build) |
 | `lengths` | every track is exactly as long as the tractor, no entry overruns its producer, and the clip lengths add up to the timeline |
 | `render` | a small render really shows the source frames the edit claims: PSNR against the same frames rendered through the same pipeline, plus the audio level per clip |
+| `fade` | when the plan asks for a fade: rendered twice, with and without it, frame against frame -- black at the outer frame, full just outside, an eased ramp in the middle, untouched in between, and the sound measured the same way |
 
 The render check compares against a **reference rendered by this same writer**
 rather than against the source decoded by ffmpeg. Measured on a clip that was
@@ -165,7 +167,7 @@ strings, nothing to round twice. Shotcut 26.9.27 and MLT 7.41.0 are recorded in
 the root `title` and in `cutwright:` properties, and `xml` fails if either
 disagrees with the binaries on disk.
 
-Two melt behaviours are worth knowing, both measured rather than guessed:
+Three melt behaviours are worth knowing, all measured rather than guessed:
 
 * A single pass that encodes a project **with audio** reaches the last frame and
   then never exits (`melt` sits at 99% forever). melt's own serialized XML does
@@ -175,6 +177,61 @@ Two melt behaviours are worth knowing, both measured rather than guessed:
   `in=` to the trim start double-counts it: clip 2 started at source frame 1415
   and landed at 2830, past the end, frozen on the last frame. Producers now span
   the whole file and the entries carry the trim.
+* melt renders on **its own default profile, 25 fps**, no matter what the
+  `<profile>` element says, unless it is told on the command line. Producers get
+  the file's profile; filters and the consumer do not. Measured: a hard cut at
+  source time 12.570 s landed on render frame 63 instead of 77 -- every frame
+  sampled 20% late -- and a fade written for the last 30 frames left the picture
+  at luma 16.0 (black) for the final 36 frames, where the plan asks for a ramp
+  and one frame of black. Every render now writes the project's profile beside
+  the proof and passes `-profile <file>`. This stayed invisible for as long as it
+  did because both sides of every comparison were rendered the same wrong way;
+  it surfaced only when a fade had to line up with a frame number.
+* **melt ignores the project's own `<profile>` element** unless `-profile` is
+  passed on the command line, and silently renders at 25 fps instead. Everything
+  this writer computes is a frame index into the profile it wrote, so a proof
+  render at 25 fps samples frames 20% late -- a cut at source frame 377 showed up
+  as render frame 63 instead of 77, and a fade that ended on frame 310 appeared
+  to start black at frame 275. `build` now writes the profile to a `.prof` beside
+  each render and passes `-profile`, which moved those renders to 30 fps and the
+  cut to frame 76.
+
+### Fade
+
+A plan can ask for a fade in, a fade out, or both, in seconds, and the sound
+follows the picture by default:
+
+```json
+{
+  "name": "demo_fade",
+  "fade": {"in": 0.8, "out": 1.0, "audio": true},
+  "clips": [
+    {"source": "testclips/part1_1_60-120.mp4", "in": 0.0, "out": 4.0, "label": "..."}
+  ]
+}
+```
+
+That is two animated filters on the tractor: `brightness` ramps `level` 0 -> 1
+for the picture, `volume` ramps `level` -60 dB -> 0 dB for the sound, both
+keyframed in frames against the project profile (24 in, 30 out on a 30 fps
+timeline), so the ramp is the length the plan asked for and not a length melt
+picked. The filters live on the tractor, not on the clips: a producer-level
+filter applies to that one source and does nothing to the assembled edit.
+
+The `fade` check renders the project twice -- once as written, once with the
+fade removed by this same writer -- and divides their mean luma frame by frame,
+so "half way" means half of what *that* frame looks like without a fade. It then
+asserts the shape: black at the outer frame, full at the frame just outside the
+fade, between 25% and 75% at the middle of the ramp -- melt eases in and out of
+an animated property, so the middle frame sits near 30% and 45% rather than on a
+straight line -- and full brightness at three points inside the body. An earlier
+version of this check compared the head against the middle of the timeline and
+read a brighter shot as the yardstick: it failed a fade that was correct. The
+control render cannot make that mistake, and the body samples are what catch a
+fade that is written into the file but applied to the wrong frames. Measured on
+`demo_fade`: frame 0 at 0.00, the middle of the fade in at 0.28, frame 24 at
+0.99, frame 279 at 1.00, the middle of the fade out at 0.45, the last frame at
+0.01, and 0.99-1.00 at three points inside the body.
 
 ## Testing rules
 
@@ -220,6 +277,7 @@ python -m cutwright verify  "C:\path\to\film.mp4"
 python -m cutwright transcribe "C:\path\to\clip.mp4" --subs "C:\path\to\film.srt"
 python -m cutwright transcribe "C:\path\to\clip.mp4" --fresh   # ignore the cache
 python -m cutwright build   "projects\demo_cuts\plan.json"
+python -m cutwright build   "projects\demo_fade\plan.json"
 python -m cutwright build   "projects\demo_cuts\plan.json" --width 320 --crf 30
 python -m cutwright build   "projects\demo_cuts\plan.json" --checks xml,effects
 ```
@@ -228,8 +286,9 @@ A plan is just the cuts, in order, in seconds (`out` exclusive):
 
 ```json
 {
-  "name": "demo_cuts",
-  "title": "three cuts from one test clip",
+  "name": "demo_fade",
+  "title": "three cuts, opening from black and closing to black",
+  "fade": {"in": 0.8, "out": 1.0},
   "clips": [
     {"source": "testclips/part1_1_60-120.mp4", "in": 0.0,  "out": 4.0,  "label": "crash into the wall"},
     {"source": "testclips/part1_1_60-120.mp4", "in": 34.2, "out": 37.6, "label": "he takes a bite"},
@@ -237,6 +296,9 @@ A plan is just the cuts, in order, in seconds (`out` exclusive):
   ]
 }
 ```
+
+`fade` is optional and applies to the whole program, picture and sound together
+(`"audio": false` fades the picture only). Seconds, converted to frames once.
 
 `source` is resolved against the fork root first, then against the plan's own
 folder. `build` writes `<name>.mlt`, `checks.json` and `digest.txt` into
@@ -252,15 +314,19 @@ exits 3 instead of guessing.
 
 | piece | status |
 |---|---|
-| fade in / out | not built -- `brightness` and `volume` are both confirmed present for this |
 | title text | not built -- `dynamictext`, `qtext` and `text` are all confirmed present |
 | transition between two clips | not built -- `luma`, `mix` and `composite` are all confirmed present |
 | music dipping under the voice | not built -- a second audio track with keyframed `volume` |
+| planner: transcript + frames -> plan | not built -- the pieces exist separately; nothing joins them yet |
 
 Nothing gets installed without approval. Shotcut was installed on explicit
-approval; it is only unpacked, never launched as a GUI. `build` has now written
-`projects\demo_cuts\demo_cuts.mlt`, and all four checks pass on it -- but the
-GUI has not opened that file yet, so "Shotcut opens it as an editable timeline"
-is still unproven. What is proven is narrower and checkable: melt renders it to
-the right frames and the right audio, the XML is well formed, and every effect
-name in it exists in this Shotcut.
+approval; it is only unpacked, never launched as a GUI by this tool. `build` has
+written `projects\demo_cuts\demo_cuts.mlt` (three cuts, no fade) and
+`projects\demo_fade\demo_fade.mlt` (the same three cuts under a 0.8 s fade in
+and a 1.0 s fade out, picture and sound), and all five checks pass on both.
+`demo_cuts` has been opened in the Shotcut GUI: three clips on V1 with their
+labels, three on A1 with waveforms, ruler reading `00:00:10.377`. `demo_fade`
+has not been opened by hand yet -- what is proven about it is what the checks
+measure: melt renders it to the right frames, the ramp is where the plan asked
+for it, the sound follows, the XML is well formed, and every effect name in it
+exists in this Shotcut.

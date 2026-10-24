@@ -17,4 +17,4 @@ checks
   [+] xml      83 element(s), 11 id(s), 11 reference(s) resolve, records Shotcut 26.9.27 / MLT 7.41.0
   [+] effects  4 name(s) -- avformat, color, frei0r.cairoblend, mix -- all in melt's own lists (674 filters / 59 transitions / 42 producers)
   [+] lengths  311 frames (10.377 s) = 120 + 102 + 89; A1 311, Background 311, V1 311
-  [+] render   311/311 frames, 10.377 s of audio, 35.1 dB, 36.6 dB, 32.5 dB, control 13.5 dB, audio -23.2 dB vs source -23.5 dB, 14.4 s to render at 320x568
+  [+] render   311/311 frames, 10.377 s of audio, 30.6 dB, 34.5 dB, 31.5 dB, control 13.5 dB, audio -23.2 dB vs source -23.5 dB, 15.4 s to render at 270x480

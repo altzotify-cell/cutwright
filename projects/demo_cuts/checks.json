@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-24T12:09:24",
+  "generated": "2026-10-24T12:49:20",
   "plan": "projects\\demo_cuts\\plan.json",
   "project": "projects\\demo_cuts\\demo_cuts.mlt",
   "shotcut": "26.9.27",
@@ -60,31 +60,31 @@
     {
       "name": "render",
       "ok": true,
-      "detail": "311/311 frames, 10.377 s of audio, 35.1 dB, 36.6 dB, 32.5 dB, control 13.5 dB, audio -23.2 dB vs source -23.5 dB, 14.4 s to render at 320x568",
+      "detail": "311/311 frames, 10.377 s of audio, 30.6 dB, 34.5 dB, 31.5 dB, control 13.5 dB, audio -23.2 dB vs source -23.5 dB, 15.4 s to render at 270x480",
       "samples": [
         {
           "clip": 0,
           "at_s": 2.002,
           "source_frame": 60,
-          "offset_frames": 0,
-          "psnr": 35.1
+          "offset_frames": -1,
+          "psnr": 30.65
         },
         {
           "clip": 1,
           "at_s": 5.706,
           "source_frame": 1076,
-          "offset_frames": -1,
-          "psnr": 36.56
+          "offset_frames": 0,
+          "psnr": 34.45
         },
         {
           "clip": 2,
           "at_s": 8.876,
           "source_frame": 1459,
-          "offset_frames": -1,
-          "psnr": 32.54
+          "offset_frames": 0,
+          "psnr": 31.48
         }
       ],
-      "control": 13.512042,
+      "control": 13.468317,
       "mp4": "C:\\Users\\user\\Desktop\\Cutwright\\projects\\demo_cuts\\check\\proof.mp4",
       "wav": "C:\\Users\\user\\Desktop\\Cutwright\\projects\\demo_cuts\\check\\proof.wav"
     }

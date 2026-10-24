@@ -239,6 +239,31 @@ class Profile(object):
                 "frame_rate_den": str(self.fps_den),
                 "colorspace": self.colorspace}
 
+    def write_file(self, path):
+        """Write this profile as an MLT .prof file, and return the path.
+
+        melt needs to be told the profile on its own command line. It applies
+        the <profile> element in the .mlt to the producers, but filters and the
+        consumer run on melt's default -- 25 fps -- unless -profile is given.
+        Measured on this project: without it, a hard cut at source time 12.570 s
+        landed on render frame 63 instead of 77, so every frame of every proof
+        render was sampled 20% late, and a fade written for the last 30 frames
+        came out at frames 234-259 followed by half a second of black.
+        """
+        num, den = self.display_aspect
+        lines = ["description=%s" % self.description,
+                 "frame_rate_num=%d" % self.fps_num,
+                 "frame_rate_den=%d" % self.fps_den,
+                 "width=%d" % self.width,
+                 "height=%d" % self.height,
+                 "progressive=1",
+                 "sample_aspect_num=%d" % self.sar_num,
+                 "sample_aspect_den=%d" % self.sar_den,
+                 "display_aspect_num=%d" % num,
+                 "display_aspect_den=%d" % den,
+                 "colorspace=%s" % self.colorspace]
+        return guard.write_text(path, "\n".join(lines) + "\n")
+
 
 def profile_for(path):
     """Build a profile from a real file.
@@ -268,6 +293,11 @@ def _props(element, pairs):
     return element
 
 
+FADE_FLOOR_DB = -60.0      # where a fade begins and ends in sound. `volume.level`
+                           # is a dB value, and -60 dB on this material is silence
+                           # as far as any measurement here can tell.
+
+
 class Project(object):
     """One editable Shotcut timeline: background, V1 for picture, A1 for sound.
 
@@ -288,6 +318,7 @@ class Project(object):
         self.title = title or name
         self.clips = []
         self._lengths = {}
+        self.fade = {"in": 0, "out": 0, "audio": True}
 
     # -- building ---------------------------------------------------------
     def add_clip(self, source, t_in, t_out, label=""):
@@ -328,6 +359,75 @@ class Project(object):
     def length(self):
         """Timeline length in frames = the sum of the clip lengths."""
         return sum(c["frames"] for c in self.clips)
+
+    # -- fade -------------------------------------------------------------
+    def set_fade(self, fade_in=0.0, fade_out=0.0, audio=True):
+        """Program fade in and out, in seconds, from black and to black.
+
+        Held as frames, like everything else here: 0.8 s at 29.97 fps is 24
+        frames, and 24 is what ends up in the file. A one frame fade is not a
+        fade, so it is refused rather than written as a keyframe pair that adds
+        up to nothing.
+        """
+        length = self.length
+        frames_in = self.profile.frame(fade_in) if fade_in else 0
+        frames_out = self.profile.frame(fade_out) if fade_out else 0
+        for name, value in (("in", frames_in), ("out", frames_out)):
+            if value < 0:
+                raise PlanError("fade %s is %.3f s, negative" % (name, -value))
+            if value == 1:
+                raise PlanError("fade %s is one frame (%.3f s): at this frame rate "
+                                "a fade needs at least two" % (name, 1.0 / self.profile.fps))
+        if frames_in + frames_out > length:
+            raise PlanError("fade in (%d f) + fade out (%d f) is longer than the "
+                            "%d frame timeline" % (frames_in, frames_out, length))
+        self.fade = {"in": frames_in, "out": frames_out, "audio": bool(audio)}
+        return self.fade
+
+    @property
+    def has_fade(self):
+        return bool(self.fade["in"] or self.fade["out"])
+
+    def _fade_filters(self):
+        """The fade as (attributes, properties) pairs for tractor filters.
+
+        Both filters are animated on `level`, which melt reports as animatable
+        for `brightness` (0..15, so 0 is black and 1 is untouched) and for
+        `volume` (a dB value, so -60 is silence and 0 is untouched). They sit on
+        the tractor rather than on a clip because that is what a program fade
+        is: it has to darken whatever the timeline ends up showing, including
+        titles on their own track later.
+
+        Keyframe times are relative to the filter's own in-point, so the fade
+        out filter starts at the last frame the picture is still full and ramps
+        from 0 to n-1 inside itself.
+        """
+        filters = []
+        if not self.has_fade:
+            return filters
+        fade_in, fade_out = self.fade["in"], self.fade["out"]
+        last = self.length - 1
+        if fade_in:
+            attrs = {"in": "0", "out": str(fade_in - 1)}
+            filters.append((attrs, [("mlt_service", "brightness"),
+                                    ("level", "0=0;%d=1" % (fade_in - 1)),
+                                    ("shotcut:filter", "fadeInBrightness")]))
+            if self.fade["audio"]:
+                filters.append((attrs, [("mlt_service", "volume"),
+                                        ("level", "0=%.1f;%d=0"
+                                                  % (FADE_FLOOR_DB, fade_in - 1)),
+                                        ("shotcut:filter", "fadeInVolume")]))
+        if fade_out:
+            attrs = {"in": str(last - fade_out + 1), "out": str(last)}
+            filters.append((attrs, [("mlt_service", "brightness"),
+                                    ("level", "0=1;%d=0" % (fade_out - 1)),
+                                    ("shotcut:filter", "fadeOutBrightness")]))
+            if self.fade["audio"]:
+                filters.append((attrs, [("mlt_service", "volume"),
+                                        ("level", "0=0;%d=%.1f"
+                                                  % (fade_out - 1, FADE_FLOOR_DB)),
+                                        ("shotcut:filter", "fadeOutVolume")]))
+        return filters
 
     # -- xml --------------------------------------------------------------
     def to_xml(self):
@@ -415,6 +515,11 @@ class Project(object):
         transition("mix", 1, sum="1")
         transition("frei0r.cairoblend", 1, disable="1")
         transition("mix", 2, sum="1")
+
+        for index, (attrs, pairs) in enumerate(self._fade_filters()):
+            filter_el = ET.SubElement(tractor, "filter",
+                                      dict(attrs, id="filter%d" % index))
+            _props(filter_el, pairs)
         return root
 
     def text(self):
@@ -648,10 +753,19 @@ SAMPLE_WINDOW = 21         # frames rendered either side of a sample, so the
                            # +-2 frame search has material to search in
 
 
-def _melt_render(path, out_path, opts, limit, first=0, timeout=600):
+def _profile_for_render(project, near_path):
+    """Drop the project's profile next to the render so melt can be told it."""
+    folder = os.path.dirname(os.path.abspath(near_path))
+    return project.profile.write_file(os.path.join(folder, "profile.prof"))
+
+
+def _melt_render(path, out_path, opts, limit, first=0, timeout=600, profile=None):
     """One melt pass over a frame range. Returns (ok, detail, seconds)."""
-    cmd = [MELT, path, "in=%d" % first, "out=%d" % limit, "-consumer",
-           "avformat:" + out_path] + opts
+    cmd = [MELT]
+    if profile:
+        cmd += ["-profile", profile]
+    cmd += [path, "in=%d" % first, "out=%d" % limit, "-consumer",
+            "avformat:" + out_path] + opts
     started = time.time()
     try:
         r = probe.run(cmd, timeout=timeout)
@@ -682,7 +796,7 @@ def render_video(project, path, out_mp4, width=270, crf=34):
         ["f=mp4", "vcodec=libx264", "crf=%d" % crf, "preset=ultrafast",
          "pix_fmt=yuv420p", "s=%dx%d" % (width, height), "an=1",
          "real_time=-1"],
-        project.length - 1)
+        project.length - 1, profile=_profile_for_render(project, out_mp4))
     if not ok:
         return False, "video pass: " + detail, {}
     data = probe.ffprobe_json(out_mp4)
@@ -701,7 +815,7 @@ def render_audio(project, path, out_wav):
         path, out_wav,
         ["f=wav", "acodec=pcm_s16le", "ar=44100", "channels=2", "vn=0",
          "real_time=-1"],
-        project.length - 1)
+        project.length - 1, profile=_profile_for_render(project, out_wav))
     if not ok:
         return False, "audio pass: " + detail, {}
     data = probe.ffprobe_json(out_wav)
@@ -793,7 +907,7 @@ def _reference_clip(project, index, work_dir, width, crf):
         ["f=mp4", "vcodec=libx264", "crf=%d" % crf, "preset=ultrafast",
          "pix_fmt=yuv420p", "s=%dx%d" % (width, height), "an=1",
          "real_time=-1"],
-        solo.length - 1)
+        solo.length - 1, profile=_profile_for_render(solo, out_mp4))
     if not ok:
         return None, mid
     return (out_mp4, first), mid
@@ -922,6 +1036,172 @@ def check_render(project, path, work_dir, width=270, crf=34, samples=3):
 
 
 # ---------------------------------------------------------------------------
+# check 5: the fade, measured on the rendered picture and the rendered sound
+# ---------------------------------------------------------------------------
+FADE_BLACK = 0.05           # level at or under this still reads as black
+FADE_FULL = 0.90            # ... and at or over this reads as full brightness
+FADE_MID_RANGE = (0.25, 0.75)   # where the half-way frame has to land. melt
+                                # eases in and out of an animated property, so
+                                # the half-way frame sits near the middle of the
+                                # range, not on a straight line to it.
+FADE_AUDIO_DROP = 20.0      # dB the first moments of sound have to sit below the
+                            # middle of the timeline before it counts as a fade
+
+
+def _luma_curve(video, size=None):
+    """Mean luma (YAVG, 0-255) of every frame, in order, from signalstats."""
+    cfilter = "signalstats,metadata=print:file=-"
+    if size:
+        cfilter = "scale=%d:%d,%s" % (size[0], size[1], cfilter)
+    cmd = ["ffmpeg", "-hide_banner", "-nostdin", "-i", video, "-an",
+           "-vf", cfilter, "-f", "null", "-"]
+    r = probe.run(cmd, timeout=600)
+    return [float(v) for v in re.findall(r"YAVG=([0-9.]+)",
+                                        (r.stdout or "") + (r.stderr or ""))]
+
+
+
+def check_fade(project, path, work_dir, proof=None, wav=None, width=140, crf=36):
+    """5. Dark at both ends, a ramp in between, measured frame by frame.
+
+    The same project is rendered twice: once as written, once with the fade
+    taken out by this same writer. Frame n of one against frame n of the other
+    gives the level the fade applied at that frame -- same footage, same
+    compositing path, same encoder -- so the check never has to assume what the
+    shot was supposed to look like. An earlier version compared the head against
+    the middle of the timeline and read a different, brighter shot as "the
+    picture"; this one cannot make that mistake.
+
+    What it asserts is the shape, not the curve: black at the outer frame, full
+    at the frame just outside the fade, an eased ramp landing between the two at
+    the half-way frame, and full brightness everywhere in between. A filter that
+    is written but not applied, or applied at the wrong frames, fails all four.
+    """
+    if not project.has_fade:
+        return _result("fade", False,
+                       "the plan has no fade, so there is nothing to measure here")
+
+    fps = project.profile.fps
+    length = project.length
+    guard.ensure_dir(work_dir)
+    problems, rows = [], []
+
+    if not (proof and os.path.isfile(proof)):
+        proof = os.path.join(work_dir, "fade.mp4")
+        if os.path.isfile(proof):
+            os.remove(proof)
+        ok, detail, _info = render_video(project, path, proof, width=width, crf=crf)
+        if not ok:
+            return _result("fade", False, "no picture to measure: " + detail)
+
+    # The control: this project with the fade removed, so both renders differ in
+    # exactly one thing.
+    plain = Project(project.name + "_no_fade", project.profile, project.shotcut,
+                    project.mlt, "same timeline, no fade")
+    for clip in project.clips:
+        plain.add_clip(clip["source"], clip["in"] / fps,
+                       (clip["out"] + 1) / fps, clip["label"])
+    plain_path = plain.write(os.path.join(work_dir, plain.name + ".mlt"))
+    plain_mp4 = os.path.join(work_dir, plain.name + ".mp4")
+    if os.path.isfile(plain_mp4):
+        os.remove(plain_mp4)
+    ok, detail, _info = render_video(plain, plain_path, plain_mp4, width=width,
+                                     crf=crf)
+    if not ok:
+        return _result("fade", False, "no control picture to compare against: "
+                                      + detail)
+
+    size = (int(width), int(round(width * project.profile.height /
+                                 float(project.profile.width) / 2.0)) * 2)
+    faded = _luma_curve(proof, size)
+    control = _luma_curve(plain_mp4, size)
+    if len(faded) < length - 1 or len(control) < length - 1:
+        return _result("fade", False,
+                       "could not read both renders in full: %d and %d frames "
+                       "against a %d frame timeline"
+                       % (len(faded), len(control), length))
+
+    level = []
+    for index in range(length):
+        a = faded[index]
+        b = control[index]
+        # Below 17 there is no light to divide: a black frame either way.
+        level.append((a - 16.0) / (b - 16.0) if b > 17.0 else 1.0)
+
+    def measure(label, frame):
+        frame = max(0, min(frame, length - 1))
+        value = round(level[frame], 3)
+        rows.append({"what": label, "frame": frame,
+                     "at_s": round(frame / fps, 3), "level": value})
+        return value
+
+    def want(label, frame, low, high):
+        value = measure(label, frame)
+        if not low <= value <= high:
+            problems.append("%s measures %.2f of full brightness, wanted %.2f-%.2f"
+                            % (label, value, low, high))
+        return value
+
+    if project.fade["in"]:
+        n = project.fade["in"]
+        want("first frame", 0, 0.0, FADE_BLACK)
+        want("half way into the fade in", (n - 1) // 2, FADE_MID_RANGE[0],
+             FADE_MID_RANGE[1])
+        want("first frame after the fade in", n, FADE_FULL, 1.02)
+
+    if project.fade["out"]:
+        n, last = project.fade["out"], length - 1
+        start = last - n + 1
+        want("last frame before the fade out", start - 1, FADE_FULL, 1.02)
+        want("half way into the fade out", start + (n - 1) // 2,
+             FADE_MID_RANGE[0], FADE_MID_RANGE[1])
+        want("last frame", last, 0.0, FADE_BLACK)
+
+    # The middle has to be untouched, or a fade is just the visible part of a
+    # timeline that is dimmed somewhere it should not be.
+    for frame in (project.fade["in"] + 1,
+                  length // 2,
+                  length - project.fade["out"] - 2):
+        if 0 <= frame < length:
+            want("frame %d, inside the edit" % frame, frame, FADE_FULL, 1.02)
+
+    heard = None
+    if project.fade["audio"] and project.fade["in"]:
+        span = min(0.15, project.fade["in"] / fps)
+        mine = False
+        if not (wav and os.path.isfile(wav)):
+            mine = True
+            wav = os.path.join(work_dir, "fade.wav")
+            if os.path.isfile(wav):
+                os.remove(wav)
+            ok, detail, _info = render_audio(project, path, wav)
+            if not ok:
+                problems.append("no sound to measure: " + detail)
+                wav = None
+        if wav:
+            first_db = _loudness(wav, 0.0, span)
+            mid_db = _loudness(wav, project.profile.seconds(length // 2), span)
+            if first_db is not None and mid_db is not None:
+                heard = (first_db, mid_db)
+                if first_db > mid_db - FADE_AUDIO_DROP:
+                    problems.append("the first %.2f s of sound measures %.1f dB "
+                                    "against %.1f dB in the middle -- the sound "
+                                    "does not fade with the picture"
+                                    % (span, first_db, mid_db))
+        if mine and wav and os.path.isfile(wav):
+            os.remove(wav)
+
+    detail = ", ".join("%s %.2f" % (row["what"], row["level"]) for row in rows)
+    if heard:
+        detail += (", sound %.1f dB at the head against %.1f dB in the middle"
+                   % heard)
+    if problems:
+        return _result("fade", False, "; ".join(problems) + " [" + detail + "]",
+                       samples=rows)
+    return _result("fade", True, "level " + detail, samples=rows)
+
+
+# ---------------------------------------------------------------------------
 # plan -> project -> checks, in one place so the CLI stays thin
 # ---------------------------------------------------------------------------
 def _resolve(raw, base):
@@ -958,10 +1238,22 @@ def load_plan(path):
         clips.append({"source": _resolve(str(raw["source"]), base),
                       "in": start, "out": end,
                       "label": str(raw.get("label") or "")})
+    raw_fade = plan.get("fade") or {}
+    if not isinstance(raw_fade, dict):
+        raise PlanError("\"fade\" has to be an object like {\"in\": 0.8, \"out\": 1.0}")
+    fade = {}
+    for key in ("in", "out"):
+        try:
+            fade[key] = float(raw_fade.get(key, 0.0) or 0.0)
+        except (TypeError, ValueError):
+            raise PlanError("fade %s is not a number: %r" % (key, raw_fade.get(key)))
+        if fade[key] < 0:
+            raise PlanError("fade %s is negative (%.3f s)" % (key, fade[key]))
+    fade["audio"] = bool(raw_fade.get("audio", True))
     name = str(plan.get("name") or
                os.path.splitext(os.path.basename(path))[0])
     return {"name": name, "title": str(plan.get("title") or ""),
-            "clips": clips, "path": os.path.abspath(path)}
+            "clips": clips, "fade": fade, "path": os.path.abspath(path)}
 
 
 def build(plan_path, out_root=None, width=270, crf=34, samples=3, checks=None):
@@ -976,12 +1268,21 @@ def build(plan_path, out_root=None, width=270, crf=34, samples=3, checks=None):
     project = Project(plan["name"], profile, title=plan["title"])
     for clip in plan["clips"]:
         project.add_clip(clip["source"], clip["in"], clip["out"], clip["label"])
+    if plan["fade"]["in"] or plan["fade"]["out"]:
+        project.set_fade(plan["fade"]["in"], plan["fade"]["out"],
+                         plan["fade"]["audio"])
     folder = guard.ensure_dir(os.path.join(out_root or guard.PROJECTS,
                                           project.name))
     path = project.write(os.path.join(folder, project.name + ".mlt"))
 
     order = ["xml", "effects", "lengths", "render"]
+    if project.has_fade:
+        order.append("fade")
     wanted = [c.lower() for c in (checks or order)]
+    unknown = [name for name in wanted if name not in order]
+    if unknown:
+        raise PlanError("no such check(s): %s (this build has %s)"
+                        % (", ".join(sorted(set(unknown))), ", ".join(order)))
     skipped = [name for name in order if name not in wanted]
     results = []
     if "xml" in wanted:
@@ -993,6 +1294,14 @@ def build(plan_path, out_root=None, width=270, crf=34, samples=3, checks=None):
     if "render" in wanted:
         results.append(check_render(project, path, os.path.join(folder, "check"),
                                     width=width, crf=crf, samples=samples))
+    if "fade" in wanted:
+        # Reuse the render check's own files when they are there: same frames,
+        # same encoder, so the two checks cannot disagree about the picture.
+        rendered = next((c for c in results if c["name"] == "render" and c["ok"]),
+                        {})
+        results.append(check_fade(project, path, os.path.join(folder, "check"),
+                                  proof=rendered.get("mp4"), wav=rendered.get("wav"),
+                                  width=width, crf=crf))
 
     result = {"plan": plan, "project": project, "path": path, "folder": folder,
               "checks": results, "skipped": skipped}
@@ -1026,9 +1335,15 @@ def _digest(result):
                 project.profile.colorspace),
              "timeline       %d frames, %.3f s, %d clip(s)"
              % (project.length, project.profile.seconds(project.length),
-                len(project.clips)),
-             "",
-             "clips"]
+                len(project.clips))]
+    if project.has_fade:
+        lines.append("fade           in %d f (%.3f s), out %d f (%.3f s)%s"
+                     % (project.fade["in"],
+                        project.profile.seconds(project.fade["in"]),
+                        project.fade["out"],
+                        project.profile.seconds(project.fade["out"]),
+                        "" if project.fade["audio"] else ", picture only"))
+    lines += ["", "clips"]
     for index, clip in enumerate(project.clips):
         lines.append("  %d  %-11s %-42s %7.3f-%-7.3f frames %d-%d  %d f  %s"
                      % (index, clip["producer"], guard.rel(clip["source"]),

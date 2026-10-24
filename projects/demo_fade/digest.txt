@@ -1,0 +1,22 @@
+cutwright 0.1.0  build record
+plan           projects\demo_fade\plan.json
+plan sha256    c7ad8cc6fc2e673b207446dd2820f66e1f4990c1929c162538093fb845195294
+project        projects\demo_fade\demo_fade.mlt
+project sha256 ad9335d181d258b18a2bc604d3b947b66ab3c0df1f9f8ce85e034d1e4af00297
+shotcut        26.9.27   (shotcut.exe product version)
+mlt            7.41.0   (melt.exe --version)
+profile        1080x1920, 30000/1001 fps, colorspace 709
+timeline       311 frames, 10.377 s, 3 clip(s)
+fade           in 24 f (0.801 s), out 30 f (1.001 s)
+
+clips
+  0  producer1   testclips\part1_1_60-120.mp4                 0.000-4.004   frames 0-119  120 f  crash into the wall
+  1  producer2   testclips\part1_1_60-120.mp4                34.201-37.604  frames 1025-1126  102 f  he takes a bite
+  2  producer3   testclips\part1_1_60-120.mp4                47.214-50.183  frames 1415-1503  89 f  the word is meat
+
+checks
+  [+] xml      99 element(s), 15 id(s), 11 reference(s) resolve, records Shotcut 26.9.27 / MLT 7.41.0
+  [+] effects  6 name(s) -- avformat, brightness, color, frei0r.cairoblend, mix, volume -- all in melt's own lists (674 filters / 59 transitions / 42 producers)
+  [+] lengths  311 frames (10.377 s) = 120 + 102 + 89; A1 311, Background 311, V1 311
+  [+] render   311/311 frames, 10.377 s of audio, 30.7 dB, 34.4 dB, 31.5 dB, control 13.5 dB, audio -23.9 dB vs source -23.5 dB, 17.8 s to render at 270x480
+  [+] fade     level first frame 0.00, half way into the fade in 0.28, first frame after the fade in 0.99, last frame before the fade out 1.00, half way into the fade out 0.45, last frame 0.01, frame 25, inside the edit 0.99, frame 155, inside the edit 1.00, frame 279, inside the edit 1.00, sound -76.0 dB at the head against -23.5 dB in the middle
