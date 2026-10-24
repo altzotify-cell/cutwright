@@ -1,11 +1,12 @@
 {
-  "generated": "2026-10-24T14:47:08",
+  "generated": "2026-10-24T15:44:53",
   "plan": "projects\\demo_title\\plan.json",
   "project": "projects\\demo_title\\demo_title.mlt",
   "shotcut": "26.9.27",
   "mlt": "7.41.0",
   "frames": 311,
   "skipped": [],
+  "not_run": [],
   "clips": [
     {
       "source": "testclips\\part1_1_60-120.mp4",
@@ -81,7 +82,7 @@
     {
       "name": "render",
       "ok": true,
-      "detail": "311/311 frames, 10.377 s of audio, 26.0 dB, 34.4 dB, 31.6 dB, control 13.4 dB, audio -23.9 dB vs source -23.5 dB, 25.9 s to render at 270x480",
+      "detail": "311/311 frames, 10.377 s of audio, 26.0 dB, 34.4 dB, 31.6 dB, control 13.4 dB, audio -23.9 dB vs source -23.5 dB, 28.9 s to render at 270x480",
       "samples": [
         {
           "clip": 0,
@@ -259,6 +260,29 @@
           "band_psnr": 26.26
         }
       ]
+    },
+    {
+      "name": "gui",
+      "ok": true,
+      "ran": true,
+      "detail": "Shotcut's own preview, frame 0: 280 white pixels inside the 174x310 picture, centred 0.503 of its height (the middle band is 0.38-0.62); the same file without the text has 0 white pixels there",
+      "samples": [
+        {
+          "what": "shotcut preview at frame 0",
+          "rect": [
+            946,
+            164,
+            1120,
+            474
+          ],
+          "white": 280,
+          "band": 0.5032258064516129,
+          "control_white": 0
+        }
+      ],
+      "png": "C:\\Users\\user\\Desktop\\Cutwright\\projects\\demo_title\\check\\gui_shotcut.png",
+      "control_png": "C:\\Users\\user\\Desktop\\Cutwright\\projects\\demo_title\\check\\gui_shotcut_plain.png",
+      "seconds": 14.3
     }
   ]
 }

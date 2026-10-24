@@ -599,6 +599,8 @@ def cmd_build(args):
     for check in result["checks"]:
         print("  [%s] %-8s %s" % ("+" if check["ok"] else "!", check["name"],
                                   check["detail"]))
+    for run in result.get("not_run") or []:
+        print("  [ ] %-8s not run: %s" % (run["name"], run["detail"]))
     for name in result["skipped"]:
         print("  [ ] %-8s not run" % name)
     rule("-")
@@ -607,9 +609,11 @@ def cmd_build(args):
     if failed:
         print("verdict     NOT ready: %d check(s) failed" % len(failed))
         return 5
-    if result["skipped"]:
+    if result["skipped"] or result.get("not_run"):
         print("verdict     %d check(s) passed, NOT RUN: %s"
-              % (len(result["checks"]), ", ".join(result["skipped"])))
+              % (len(result["checks"]),
+                 ", ".join([r["name"] for r in result.get("not_run") or []]
+                           + result["skipped"])))
         return 0
     print("verdict     all checks passed")
     print("open it     %s" % os.path.abspath(result["path"]))
@@ -679,9 +683,9 @@ def build_parser():
     p.add_argument("--samples", type=int, default=3,
                    help="how many clips to compare frames for (default 3)")
     p.add_argument("--checks", metavar="LIST",
-                   help="subset of xml,effects,lengths,render,fade,titles,shotcut "
-                        "to run (default: all of them; fade, titles and shotcut "
-                        "only when the plan has one)")
+                   help="subset of xml,effects,lengths,render,fade,titles,shotcut,gui "
+                        "to run (default: all of them; fade, titles, shotcut and gui "
+                        "only when the plan has titles in it)")
     p.set_defaults(func=cmd_build)
 
     p = sub.add_parser("transcribe",

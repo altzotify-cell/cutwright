@@ -394,18 +394,42 @@ class Project(object):
         self.clips.append(clip)
         return clip
 
+    def add_colour(self, rgb, frames, label="colour"):
+        """Append a solid colour clip: a `color` producer, no source file.
+
+        Used by the GUI probe, which needs a picture whose exact pixels can be
+        found in a screenshot. `rgb` is written as MLT's own literal, which is
+        0xRRGGBBAA -- 0x808080 renders as teal, not grey, and that cost an hour
+        once.
+        """
+        frames = int(frames)
+        if frames < 1:
+            raise PlanError("a colour clip needs at least one frame")
+        rgb = str(rgb)
+        if not re.match(r"^0x[0-9a-fA-F]{8}$", rgb):
+            raise PlanError("colour %r is not 0xRRGGBBAA" % rgb)
+        clip = {"producer": "producer%d" % (len(self.clips) + 1),
+                "source": "color:" + rgb, "in": 0, "out": frames - 1,
+                "frames": frames, "at": self.length, "label": label,
+                "colour": rgb}
+        self.clips.append(clip)
+        return clip
+
     def source_frames(self, source):
         """Frame count of the whole file, from the stream when it reports one."""
-        if source not in self._lengths:
-            data = probe.ffprobe_json(source)
-            video = next((s for s in data.get("streams", []) or []
-                          if s.get("codec_type") == "video"), {})
-            frames = int(video.get("nb_frames") or 0)
-            if not frames:
-                duration = float((data.get("format") or {}).get("duration") or 0)
-                frames = self.profile.frame(duration)
-            self._lengths[source] = frames
-        return self._lengths[source]
+        if source in self._lengths:
+            return self._lengths[source]
+        if source.startswith("color:"):
+            raise PlanError("a colour clip has no source file to count frames in")
+        data = probe.ffprobe_json(source)
+        video = next((s for s in data.get("streams", []) or []
+                      if s.get("codec_type") == "video"), {})
+        frames = int(video.get("nb_frames") or 0)
+        if not frames:
+            duration = float((data.get("format") or {}).get("duration") or 0)
+            frames = self.profile.frame(duration)
+        self._lengths[source] = frames
+        return frames
 
     @property
     def length(self):
@@ -572,6 +596,17 @@ class Project(object):
             # source frame 1415 landed at 2830 -- past the end, held on the last
             # frame. Measured: 21.6 dB on the correct clip, 8-14 dB on the two
             # shifted ones.
+            if clip.get("colour"):
+                p = ET.SubElement(root, "producer", {"id": clip["producer"],
+                                                     "in": "0",
+                                                     "out": str(clip["frames"] - 1)})
+                _props(p, [("length", clip["frames"]),
+                           ("eof", "pause"),
+                           ("resource", clip["colour"]),
+                           ("mlt_service", "color"),
+                           ("mlt_image_format", "rgba"),
+                           ("shotcut:caption", clip["label"])])
+                continue
             total = self.source_frames(clip["source"])
             p = ET.SubElement(root, "producer", {"id": clip["producer"],
                                                  "in": "0",
@@ -1960,13 +1995,14 @@ def build(plan_path, out_root=None, width=270, crf=34, samples=3, checks=None):
     if project.has_titles:
         order.append("titles")
         order.append("shotcut")
+        order.append("gui")
     wanted = [c.lower() for c in (checks or order)]
     unknown = [name for name in wanted if name not in order]
     if unknown:
         raise PlanError("no such check(s): %s (this build has %s)"
                         % (", ".join(sorted(set(unknown))), ", ".join(order)))
     skipped = [name for name in order if name not in wanted]
-    results = []
+    results, not_run = [], []
     if "xml" in wanted:
         results.append(check_xml(path))
     if "effects" in wanted:
@@ -1992,14 +2028,24 @@ def build(plan_path, out_root=None, width=270, crf=34, samples=3, checks=None):
         results.append(check_shotcut(project, path, os.path.join(folder, "check"),
                                      width=width, proof=titles.get("mp4"),
                                      control=titles.get("control")))
+    if "gui" in wanted:
+        # Needs a visible desktop and Shotcut's own window. Where there is no
+        # desktop the check reports that it did not run, rather than passing
+        # quietly: "could not look" is never recorded as "looked and saw nothing".
+        from . import gui as gui_check
+        shot = gui_check.check(project, os.path.join(folder, "check"))
+        if shot.get("ran"):
+            results.append(shot)
+        else:
+            not_run.append({"name": shot["name"], "detail": shot["detail"]})
 
     result = {"plan": plan, "project": project, "path": path, "folder": folder,
-              "checks": results, "skipped": skipped}
+              "checks": results, "skipped": skipped, "not_run": not_run}
     guard.write_json(os.path.join(folder, "checks.json"), {
         "generated": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "plan": guard.rel(plan["path"]), "project": guard.rel(path),
         "shotcut": project.shotcut, "mlt": project.mlt,
-        "frames": project.length, "skipped": skipped,
+        "frames": project.length, "skipped": skipped, "not_run": not_run,
         "clips": [{"source": guard.rel(c["source"]), "in": c["in"],
                    "out": c["out"], "frames": c["frames"],
                    "label": c["label"]} for c in project.clips],
@@ -2055,6 +2101,8 @@ def _digest(result):
     for check in result["checks"]:
         lines.append("  [%s] %-8s %s" % ("+" if check["ok"] else "!",
                                          check["name"], check["detail"]))
+    for run in result.get("not_run") or []:
+        lines.append("  [ ] %-8s not run: %s" % (run["name"], run["detail"]))
     for name in result["skipped"]:
         lines.append("  [ ] %-8s not run" % name)
     return "\n".join(lines) + "\n"
