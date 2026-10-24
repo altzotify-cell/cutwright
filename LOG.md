@@ -144,4 +144,24 @@ Everything before 2026-10-24 has no clock on it -- the log starts with the fade.
                   behaviour), REPORT (demo_title section, check table with
                   shotcut), PROVENANCE (new hash, the Shotcut-saved copy and what
                   it proves), this log.
+
+~19:20  dissolve  Crossfade renderer working shape found. Shotcut disables V1's
+                  blend on every save (`disable=1`), which is why every flat
+                  multitrack dissolve died in the GUI while melt drew it; the
+                  whole story is in HANDOFF.md. Working layout: a nested tractor
+                  played as one V1 entry, outgoing tail on track 0, incoming head
+                  on track 1 with a `brightness` alpha ramp keyed to its own
+                  frames, one `frei0r.cairoblend` a=0 b=1 inside the tractor. A
+                  `luma` in the same place ramps wherever it likes (ten variants
+                  tried), which cost most of the afternoon.
+                  melt frames 34/40/48 = (214,0,234) / (229,55,239) / (252,255,252);
+                  Shotcut at seek 0.25 / 0.60 / 0.85 = (255,0,254) / (253,108,253)
+                  / (255,255,255). Both engines agree, and a Ctrl+S keeps the
+                  filter, its keyframes and the inner blend.
+                  Not yet wired into `Project.to_xml()`, which still emits the
+                  `luma` shape -- so `projects\demo_cross` fails `gui_xfade` and
+                  its checks.json is from an older run besides. Paused here at the
+                  user's request; HANDOFF.md carries the edit and the order of
+                  work.
+
 ```

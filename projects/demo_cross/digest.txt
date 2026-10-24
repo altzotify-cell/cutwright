@@ -1,0 +1,30 @@
+cutwright 0.1.0  build record
+plan           projects\demo_cross\plan.json
+plan sha256    241ae0f770f0275c70e5697a1589e5429f76197195902de7eb2950a4eb415ecc
+project        projects\demo_cross\demo_cross.mlt
+project sha256 71a9aca7153cb2a7a0843bc3946174e9b560fede6600367ec9d99d73e3b0acdd
+shotcut        26.9.27   (shotcut.exe product version)
+mlt            7.41.0   (melt.exe --version)
+profile        1080x1920, 30000/1001 fps, colorspace 709
+timeline       311 frames, 10.377 s, 3 clip(s)
+fade           in 24 f (0.801 s), out 30 f (1.001 s)
+
+clips
+  0  producer1   testclips\part1_1_60-120.mp4                 0.000-4.004   frames 0-119  120 f  crash into the wall
+  1  producer2   testclips\part1_1_60-120.mp4                34.201-37.604  frames 1025-1126  102 f  he takes a bite
+  2  producer3   testclips\part1_1_60-120.mp4                47.214-50.183  frames 1415-1503  89 f  the word is meat
+
+titles
+  0  title1      'in on a dissolve'            frames 36-101  66 f  middle, 64 px, 0xffffffff
+
+checks
+  [!] gui_xfade at the middle of the dissolve the picture measures green 0: Shotcut is showing the outgoing colour alone, with no ramp at all [Shotcut's own preview: green 0 at the middle of the 15-frame dissolve (magenta 0, white 255), 255 past it]
+  [ ] xml      not run
+  [ ] effects  not run
+  [ ] lengths  not run
+  [ ] render   not run
+  [ ] fade     not run
+  [ ] crossfade not run
+  [ ] titles   not run
+  [ ] shotcut  not run
+  [ ] gui      not run

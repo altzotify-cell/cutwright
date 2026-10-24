@@ -40,7 +40,8 @@ param(
     [Parameter(Mandatory = $true)][string]$Project,
     [Parameter(Mandatory = $true)][string]$Out,
     [int]$TimeoutSeconds = 90,
-    [double]$SeekFraction = -1
+    [double]$SeekFraction = -1,
+    [switch]$Save
 )
 
 $ErrorActionPreference = 'Continue'   # failures are reported as JSON, not as a stack trace
@@ -64,6 +65,7 @@ public static class CwShotcutWindow
     [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
     [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
     [DllImport("user32.dll")] public static extern void mouse_event(uint f, int dx, int dy, uint d, IntPtr e);
+[DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint flags, IntPtr extra);
     [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
     [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
 
@@ -176,12 +178,38 @@ try {
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
     }
 
+    if ($Save) {
+        # Ctrl+S, so the file on disk becomes Shotcut's copy of the timeline
+        # rather than the one it was handed. Everything interesting about a
+        # project that an editor disagrees with is in that difference.
+        $before = (Get-Item -LiteralPath $Project).LastWriteTimeUtc.Ticks
+        [CwShotcutWindow]::keybd_event(0x11, 0, 0, [IntPtr]::Zero)          # Ctrl
+        [CwShotcutWindow]::keybd_event(0x53, 0, 0, [IntPtr]::Zero)          # S
+        [CwShotcutWindow]::keybd_event(0x53, 0, 2, [IntPtr]::Zero)
+        [CwShotcutWindow]::keybd_event(0x11, 0, 2, [IntPtr]::Zero)
+        for ($i = 0; $i -lt 20; $i++) {
+            Start-Sleep -Milliseconds 500
+            if ((Get-Item -LiteralPath $Project).LastWriteTimeUtc.Ticks -ne $before) {
+                $result.saved = $true
+                break
+            }
+        }
+        if (-not $result.saved) { $result.saved = $false }
+    }
+
     if ($SeekFraction -ge 0) {
         # Click the player's scrub bar at a fraction of the project. The bar runs
         # from 39.2% to 67.6% of the window's width and sits at 48.5% of its
         # height in Shotcut's default layout; a layout the user has re-arranged
         # moves it, which fails the check rather than passing it wrongly.
-        $sx = [int]($x0 + $w * (0.392 + 0.284 * $SeekFraction))
+        #
+        # The 0.3965 is the same 0.392 measured, plus a correction: a project of
+        # 32 known greys, five frames each, asked for 0.25/0.50/0.75 landed on
+        # 0.233/0.484/0.736 -- linear, and about 0.016 of the timeline short.
+        # Rounding the click position up by that much makes the request mean what
+        # it says. Measured to about a frame; a layout change moves it by far
+        # more, and then the check fails and says the playhead did not arrive.
+        $sx = [int]($x0 + $w * (0.3965 + 0.284 * $SeekFraction))
         $sy = [int]($y0 + $h * 0.485)
         [CwShotcutWindow]::SetCursorPos($sx, $sy) | Out-Null
         [CwShotcutWindow]::mouse_event(0x0002, 0, 0, 0, [IntPtr]::Zero)   # down

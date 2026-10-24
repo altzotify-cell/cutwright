@@ -582,6 +582,11 @@ def cmd_build(args):
     print("timeline    %d frames, %.3f s, %d clip(s)"
           % (project.length, profile.seconds(project.length),
              len(project.clips)))
+    if project.has_crossfade:
+        print("crossfade   %d frames (%.3f s) at each of the %d cut(s): V1's tail "
+              "under V2's head" % (project.transition,
+                                   profile.seconds(project.transition),
+                                   len(project.clips) - 1))
     print("")
 
     rows = []
@@ -683,9 +688,10 @@ def build_parser():
     p.add_argument("--samples", type=int, default=3,
                    help="how many clips to compare frames for (default 3)")
     p.add_argument("--checks", metavar="LIST",
-                   help="subset of xml,effects,lengths,render,fade,titles,shotcut,gui "
-                        "to run (default: all of them; fade, titles, shotcut and gui "
-                        "only when the plan has titles in it)")
+                   help="subset of xml,effects,lengths,render,fade,crossfade,"
+                        "titles,shotcut,gui to run (default: all of them; fade, "
+                        "crossfade, titles, shotcut and gui only when the plan "
+                        "asks for them)")
     p.set_defaults(func=cmd_build)
 
     p = sub.add_parser("transcribe",

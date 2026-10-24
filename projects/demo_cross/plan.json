@@ -1,0 +1,38 @@
+{
+  "name": "demo_cross",
+  "title": "Cutwright demo: the same three cuts, dissolved into each other",
+  "crossfade": 0.5,
+  "fade": {
+    "in": 0.8,
+    "out": 1.0
+  },
+  "titles": [
+    {
+      "text": "in on a dissolve",
+      "in": 1.2,
+      "out": 3.4,
+      "size": 64,
+      "position": "middle"
+    }
+  ],
+  "clips": [
+    {
+      "source": "testclips/part1_1_60-120.mp4",
+      "in": 0.0,
+      "out": 4.0,
+      "label": "crash into the wall"
+    },
+    {
+      "source": "testclips/part1_1_60-120.mp4",
+      "in": 34.2,
+      "out": 37.6,
+      "label": "he takes a bite"
+    },
+    {
+      "source": "testclips/part1_1_60-120.mp4",
+      "in": 47.2,
+      "out": 50.2,
+      "label": "the word is meat"
+    }
+  ]
+}

@@ -363,6 +363,9 @@ class Project(object):
         self._lengths = {}
         self.fade = {"in": 0, "out": 0, "audio": True}
         self.titles = []
+        # Frames of dissolve at every cut. 0 is a hard cut, and then this file
+        # has one video track; see crossfade() for what the shape becomes.
+        self.transition = 0
         # Leave the text off a title, keeping everything else about it: what the
         # toggle drops is exactly the two `dynamictext` filters, so the control
         # render is this same file minus the words and nothing else. The titles
@@ -435,6 +438,94 @@ class Project(object):
     def length(self):
         """Timeline length in frames = the sum of the clip lengths."""
         return sum(c["frames"] for c in self.clips)
+
+    # -- crossfades -------------------------------------------------------
+    def crossfade(self, frames):
+        """Dissolve `frames` frames at every cut, inside a tractor of its own.
+
+        The layout was found by elimination, and the reason matters because the
+        obvious shapes do not work in the editor:
+
+        * A `luma` transition on the multitrack (the flat V1/V2 way) dissolves
+          only while V1's blend is enabled -- and Shotcut writes `disable=1` on
+          that blend every time it saves a project, so the GUI then shows the
+          outgoing picture all the way through (measured in projects/demo_cross:
+          Shotcut's preview read magenta where melt read pink). Reading back
+          what Shotcut saved showed the disabled blend, which is what named the
+          cause.
+        * An opacity ramp on the incoming track needs the same blend, and fails
+          the same way.
+
+        So the dissolve happens where nothing outside it can be disabled:
+        inside a tractor of its own, played as one entry of V1's playlist.
+        Inside it, track 0 holds the outgoing clip's last `frames` and track 1
+        the incoming clip's first `frames`, and a single `luma` with no resource
+        dissolves one into the other. There is no blend in there at all, and no
+        dependency on any transition outside. Measured after a real Ctrl+S in
+        Shotcut: the tractor and its luma come back untouched (bar Shotcut
+        adding `factory` and `alpha_over=1`), and the preview reads 47% of the
+        way from magenta to white in the middle of the window.
+
+        The timeline does not move or shrink. The incoming clip gives up its
+        first `frames` to the tractor and picks up again after them, so its
+        content is all there and no later clip shifts; the outgoing clip keeps
+        rolling `frames` past its own `out`, which is what the dissolve is a
+        dissolve of. That tail has to exist in the source, and it is checked
+        here rather than discovered later as a freeze on the last frame.
+
+        Sound is not crossfaded. One audio playlist cannot play two moments at
+        once, so the picture dissolves and the audio cuts where the cut was; a
+        sound crossfade needs the audio on tracks of its own.
+        """
+        frames = int(frames)
+        if frames < 2:
+            raise PlanError("a crossfade of %d frame(s) is not a crossfade: it "
+                            "needs at least two frames to move through" % frames)
+        if len(self.clips) < 2:
+            raise PlanError("a crossfade needs at least two clips to be between")
+        last = len(self.clips) - 1
+        for index, clip in enumerate(self.clips):
+            if index and clip["frames"] <= frames + 1:
+                raise PlanError("clip %d is %d frames, and a %d-frame crossfade "
+                                "would leave it nothing of its own after its head"
+                                % (index, clip["frames"], frames))
+            if index == last or clip.get("colour"):
+                continue          # nothing to lend, or a colour clip grown to fit
+            total = self.source_frames(clip["source"])
+            if clip["out"] + frames >= total:
+                raise PlanError("clip %d ends on frame %d of a %d-frame file, and a "
+                                "%d-frame crossfade needs %d frames past its out"
+                                % (index, clip["out"], total, frames, frames))
+        self.transition = frames
+        return frames
+
+    @property
+    def has_crossfade(self):
+        return bool(self.transition) and len(self.clips) > 1
+
+    def dissolves(self):
+        """Each cut, as the two spans the tractor joining it has to hold."""
+        if not self.has_crossfade:
+            return []
+        made = []
+        for index, clip in enumerate(self.clips):
+            if not index:
+                continue
+            previous = self.clips[index - 1]
+            made.append({"name": "dissolve%d" % index,
+                         "at": clip["at"], "frames": self.transition,
+                         "tail": (previous["out"] + 1,
+                                  previous["out"] + self.transition),
+                         "head": (clip["in"], clip["in"] + self.transition - 1),
+                         "outgoing": previous["producer"],
+                         "incoming": clip["producer"]})
+        return made
+
+    def v1_body(self, index):
+        """The source frames of a clip that V1 shows outside any dissolve."""
+        clip = self.clips[index]
+        head = self.transition if index > 0 else 0
+        return clip["in"] + head, clip["out"]
 
     # -- titles -----------------------------------------------------------
     def add_title(self, text, t_in, t_out, size=None, position="lower",
@@ -589,7 +680,7 @@ class Project(object):
                     ("aspect_ratio", "1"), ("mlt_service", "color"),
                     ("mlt_image_format", "rgba"), ("set.test_audio", "0")])
 
-        for clip in self.clips:
+        for index, clip in enumerate(self.clips):
             # The producer spans the whole file and the *entry* carries the
             # trim. A producer whose in= is already the trim start double-counts
             # it: entries seek relative to the producer's own in, so clip 2 at
@@ -597,10 +688,14 @@ class Project(object):
             # frame. Measured: 21.6 dB on the correct clip, 8-14 dB on the two
             # shifted ones.
             if clip.get("colour"):
+                # A colour producer is as long as the clip it draws, plus the
+                # tail a dissolve borrows past its out.
+                grown = clip["frames"] + (self.transition
+                                          if index < len(self.clips) - 1 else 0)
                 p = ET.SubElement(root, "producer", {"id": clip["producer"],
                                                      "in": "0",
-                                                     "out": str(clip["frames"] - 1)})
-                _props(p, [("length", clip["frames"]),
+                                                     "out": str(grown - 1)})
+                _props(p, [("length", grown),
                            ("eof", "pause"),
                            ("resource", clip["colour"]),
                            ("mlt_service", "color"),
@@ -626,15 +721,56 @@ class Project(object):
         ET.SubElement(bglist, "entry", {"producer": "producer0", "in": "0",
                                         "out": last})
 
+        # The dissolves, before the track that plays them: each is a playlist
+        # pair -- the outgoing tail, the incoming head -- inside a tractor of its
+        # own, with one `luma` between them. Played as a single entry of V1, it
+        # is a producer like any other, which is how Shotcut keeps it: there is
+        # no multitrack transition for the editor to reconsider, and no blend for
+        # it to disable.
+        for dissolve in self.dissolves():
+            for side, producer in (("tail", dissolve["outgoing"]),
+                                   ("head", dissolve["incoming"])):
+                side_playlist = ET.SubElement(
+                    root, "playlist", {"id": "%s_%s" % (dissolve["name"], side)})
+                ET.SubElement(side_playlist, "entry",
+                              {"producer": producer,
+                               "in": str(dissolve[side][0]),
+                               "out": str(dissolve[side][1])})
+            tractor = ET.SubElement(root, "tractor", {
+                "id": dissolve["name"], "in": "0",
+                "out": str(dissolve["frames"] - 1)})
+            _props(tractor, [("shotcut:transition", "lumaMix"),
+                             ("cutwright:dissolve", "%s + %s"
+                              % (dissolve["outgoing"], dissolve["incoming"]))])
+            ET.SubElement(tractor, "track",
+                          {"producer": "%s_tail" % dissolve["name"],
+                           "hide": "audio"})
+            ET.SubElement(tractor, "track",
+                          {"producer": "%s_head" % dissolve["name"],
+                           "hide": "audio"})
+            luma = ET.SubElement(tractor, "transition",
+                                 {"id": "%s_luma" % dissolve["name"]})
+            _props(luma, [("a_track", "0"), ("b_track", "1"),
+                          ("mlt_service", "luma"), ("always_active", "1")])
+
         v1 = ET.SubElement(root, "playlist", {"id": "playlist1"})
         _props(v1, [("shotcut:video", "1"), ("shotcut:name", "V1")])
         a1 = ET.SubElement(root, "playlist", {"id": "playlist2"})
         _props(a1, [("shotcut:audio", "1"), ("shotcut:name", "A1")])
-        for clip in self.clips:
-            for playlist in (v1, a1):
-                ET.SubElement(playlist, "entry",
-                              {"producer": clip["producer"],
-                               "in": str(clip["in"]), "out": str(clip["out"])})
+        for index, clip in enumerate(self.clips):
+            start, end = self.v1_body(index)
+            ET.SubElement(v1, "entry",
+                          {"producer": clip["producer"],
+                           "in": str(start), "out": str(end)})
+            if index < len(self.clips) - 1 and self.has_crossfade:
+                ET.SubElement(v1, "entry",
+                              {"producer": "dissolve%d" % (index + 1),
+                               "in": "0", "out": str(self.transition - 1)})
+            # The sound keeps the clip whole and in order: a playlist cannot
+            # hold two moments at once, so the audio cuts where the cut was.
+            ET.SubElement(a1, "entry",
+                          {"producer": clip["producer"],
+                           "in": str(clip["in"]), "out": str(clip["out"])})
 
         # The titles, as windows on the picture track. A filter on a playlist is
         # a track filter in Shotcut: it shows in the Filters panel with the
@@ -676,10 +812,14 @@ class Project(object):
 
         made = [0]
 
-        def transition(service, b_track, a_track=None, **extra):
-            el = ET.SubElement(tractor, "transition",
-                               {"id": "transition%d" % made[0]})
+        def transition(service, b_track, a_track=None, window=None, **extra):
+            attrs = {"id": "transition%d" % made[0]}
             made[0] += 1
+            if window:
+                # in/out as attributes, which is where melt reads a
+                # transition's window from.
+                attrs["in"], attrs["out"] = str(window[0]), str(window[1])
+            el = ET.SubElement(tractor, "transition", attrs)
             pairs = [("a_track", str(b_track - 1 if a_track is None else a_track)),
                      ("b_track", str(b_track)),
                      ("mlt_service", service), ("always_active", "1")]
@@ -692,6 +832,13 @@ class Project(object):
         # visible gain -- measured here at 6.9 s vs 4.5 s for 60 frames, and
         # the two differ by 33 dB, i.e. cairo shifts the colour slightly.
         #
+        # It also has to stay disabled for a crossfade to survive. A `luma` on
+        # the multitrack dissolves only while this blend is on, and Shotcut
+        # writes `disable=1` here every time it saves -- so a file that relies
+        # on it renders as a hard cut in the editor while melt keeps showing a
+        # dissolve. The dissolves in this writer live inside tractors of their
+        # own (see Project.crossfade), where nothing out here decides them.
+        #
         # That is the whole video side of this file: one track of picture, and
         # no transition that anything on screen depends on. Titles are filters
         # on V1 (see TITLE_BANDS above), so there is no a_track here for an
@@ -703,9 +850,7 @@ class Project(object):
         # `mix` sums each track's audio into the background frame, and that is
         # where Shotcut puts it: a_track=0 on every one of these. Audio and
         # picture blend differently -- a video blend wants the running picture
-        # as its a-frame, an audio mix wants the accumulating sum -- so these
-        # stay at the background and the default above is for blends, of which
-        # this writer now emits none.
+        # as its a-frame, an audio mix wants the accumulating sum.
         transition("mix", 1, a_track=0, sum="1")
         transition("frei0r.cairoblend", 1, disable="1")
         transition("mix", 2, a_track=0, sum="1")
@@ -741,8 +886,27 @@ def _result(name, ok, detail, **extra):
     return out
 
 
+def _main_tractor(root):
+    """The timeline's own tractor: the one the document names as its producer.
+
+    Not simply the first <tractor> in the file: a dissolve is a tractor too, and
+    it comes first.
+    """
+    wanted = root.get("producer")
+    if wanted:
+        found = root.find("tractor[@id='%s']" % wanted)
+        if found is not None:
+            return found
+    for tractor in root.findall("tractor"):
+        if tractor.findtext("property[@name='shotcut']") == "1":
+            return tractor
+    return root.find("tractor")
+
+
 def _service(element):
     return element.findtext("property[@name='mlt_service']")
+
+
 
 
 def check_xml(path):
@@ -795,7 +959,7 @@ def check_xml(path):
         except (TypeError, ValueError):
             problems.append("profile is missing size or frame rate")
 
-    tractor = root.find("tractor")
+    tractor = _main_tractor(root)
     recorded_shotcut = recorded_mlt = None
     if tractor is None:
         problems.append("no <tractor>: melt would have nothing to render")
@@ -873,10 +1037,10 @@ def check_effects(path):
 # ---------------------------------------------------------------------------
 # check 3: the frames add up, on every track, not just the one you looked at
 # ---------------------------------------------------------------------------
-def check_lengths(path, clips, profile):
+def check_lengths(path, clips, profile, transition=0):
     """3. Every track is exactly as long as the tractor; nothing overruns."""
     root = ET.parse(path).getroot()
-    tractor = root.find("tractor")
+    tractor = _main_tractor(root)
     if tractor is None:
         return _result("lengths", False, "no <tractor>")
     try:
@@ -898,7 +1062,13 @@ def check_lengths(path, clips, profile):
             producers[p.get("id")] = 0
 
     per_track = {}
+    tracks = [t.get("producer") for t in tractor.findall("track")]
     for playlist in root.findall("playlist"):
+        # Only the playlists a track of the tractor plays. A dissolve's tail and
+        # head are playlists too, and they are `transition` frames long on
+        # purpose -- counting them as tracks would report them short.
+        if playlist.get("id") not in tracks:
+            continue
         name = (playlist.findtext("property[@name='shotcut:name']")
                 or playlist.get("id"))
         frames = 0
@@ -934,19 +1104,103 @@ def check_lengths(path, clips, profile):
 
     v1 = [int(e.get("out")) - int(e.get("in")) + 1
           for e in root.findall("playlist[@id='playlist1']/entry")]
-    want = [c["frames"] for c in clips]
+    # A dissolve does not add or remove frames: an incoming clip gives its first
+    # `transition` frames to the tractor that joins it to its predecessor, and
+    # that tractor is an entry of its own `transition` frames long. The
+    # predecessor keeps rolling past its own out inside the tractor, so nothing
+    # after it shifts and the total still adds up.
+    want = []
+    for index, clip in enumerate(clips):
+        body = clip["frames"] - (transition if index else 0)
+        want.append(body)
+        if transition and index < len(clips) - 1:
+            want.append(transition)
     if v1 != want:
         problems.append("V1 entries are %s frames, the plan says %s"
                         % (v1, want))
 
+    # The shape of a dissolve, measured rather than assumed. Each cut has to
+    # have a tractor of its own, exactly `transition` frames long, holding the
+    # outgoing tail and the incoming head with one luma between them -- and no
+    # blend anywhere that a later save could switch off.
+    dissolves = []
+    tractors = {t.get("id"): t for t in root.findall("tractor") if t.get("id")}
+    if transition:
+        if len(clips) < 2:
+            problems.append("a crossfade is asked for but there is only one clip")
+        for index in range(1, len(clips)):
+            name = "dissolve%d" % index
+            tractor = tractors.get(name)
+            if tractor is None:
+                problems.append("no %s for the cut at frame %d"
+                                % (name, clips[index]["at"]))
+                continue
+            try:
+                start, end = int(tractor.get("in")), int(tractor.get("out"))
+            except (TypeError, ValueError):
+                problems.append("%s has no usable in/out" % name)
+                continue
+            if end - start + 1 != transition:
+                problems.append("%s is %d frames, the crossfade is %d"
+                                % (name, end - start + 1, transition))
+            dissolves.append((clips[index]["at"], end - start + 1))
+            sides = {}
+            for track in tractor.findall("track"):
+                playlist = root.find("playlist[@id='%s']" % track.get("producer"))
+                if playlist is None:
+                    problems.append("%s plays %r, which is not a playlist"
+                                    % (name, track.get("producer")))
+                    continue
+                entry = playlist.find("entry")
+                if entry is not None:
+                    sides[track.get("producer")] = (
+                        entry.get("producer"), int(entry.get("in")),
+                        int(entry.get("out")))
+            want_tail = ("producer%d" % index,
+                         clips[index - 1]["out"] + 1,
+                         clips[index - 1]["out"] + transition)
+            want_head = ("producer%d" % (index + 1), clips[index]["in"],
+                         clips[index]["in"] + transition - 1)
+            if sides.get("%s_tail" % name) != want_tail:
+                problems.append("%s_tail plays %s, the outgoing tail is %s"
+                                % (name, sides.get("%s_tail" % name), want_tail))
+            if sides.get("%s_head" % name) != want_head:
+                problems.append("%s_head plays %s, the incoming head is %s"
+                                % (name, sides.get("%s_head" % name), want_head))
+            luma = [t for t in tractor.findall("transition")
+                    if _service(t) == "luma"]
+            if len(luma) != 1:
+                problems.append("%s has %d luma transition(s), not one"
+                                % (name, len(luma)))
+            else:
+                tracks = [t.get("producer") for t in tractor.findall("track")]
+                if (luma[0].findtext("property[@name='a_track']"),
+                        luma[0].findtext("property[@name='b_track']")) != ("0", "1"):
+                    problems.append("%s's luma runs between tracks %s and %s, not "
+                                    "0 and 1" % (name,
+                                                 luma[0].findtext("property[@name='a_track']"),
+                                                 luma[0].findtext("property[@name='b_track']")))
+                for blend in tractor.findall("transition"):
+                    if _service(blend) in BLEND_SERVICES \
+                            and blend.findtext("property[@name='disable']") != "1":
+                        problems.append("%s carries a live %s blend: the dissolve "
+                                        "must not depend on one, because Shotcut "
+                                        "disables blends when it saves"
+                                        % (name, _service(blend)))
+
     if problems:
-        return _result("lengths", False, "; ".join(problems), per_track=per_track)
-    return _result("lengths", True,
-                   "%d frames (%.3f s) = %s; %s"
-                   % (total, profile.seconds(total),
-                      " + ".join(str(f) for f in want),
-                      ", ".join("%s %d" % (k, v) for k, v in sorted(per_track.items()))),
-                   per_track=per_track)
+        return _result("lengths", False, "; ".join(problems), per_track=per_track,
+                       dissolves=dissolves)
+    detail = ("%d frames (%.3f s) = %s; %s"
+              % (total, profile.seconds(total),
+                 " + ".join(str(f) for f in want),
+                 ", ".join("%s %d" % (k, v) for k, v in sorted(per_track.items()))))
+    if dissolves:
+        detail += ("; %d dissolve(s) of %d frames at %s"
+                   % (len(dissolves), transition,
+                      ", ".join(str(at) for at, _frames in dissolves)))
+    return _result("lengths", True, detail, per_track=per_track,
+                   dissolves=dissolves)
 
 
 # ---------------------------------------------------------------------------
@@ -1153,7 +1407,7 @@ def _sample_clips(clips, count):
                    for i in range(count)})
 
 
-def _reference_clip(project, index, work_dir, width, crf):
+def _reference_clip(project, index, work_dir, width, crf, offset=None):
     """Render one sample's source frames, as a one-clip project by this writer.
 
     Why not melt on the source directly: the real project goes through the RGBA
@@ -1167,9 +1421,14 @@ def _reference_clip(project, index, work_dir, width, crf):
     path, so the only thing left to differ is which frames are on screen. A
     timing bug in the writer still cannot hide: this reference starts at a
     different source frame from the clip it is checking.
+
+    `offset` is where in the clip the sample was taken, in frames. It has to be
+    passed when the sample is not at the clip's middle: a crossfade rules out
+    the middle of short clips, and a reference centred somewhere else is a
+    comparison of two different moments.
     """
     clip = project.clips[index]
-    mid = clip["in"] + clip["frames"] // 2
+    mid = clip["in"] + (clip["frames"] // 2 if offset is None else int(offset))
     first = max(mid - SAMPLE_WINDOW // 2, 0)
     fps = project.profile.fps
     solo = Project("ref%d" % index, project.profile, project.shotcut, project.mlt,
@@ -1234,14 +1493,21 @@ def check_render(project, path, work_dir, width=270, crf=34, samples=3):
     shots, rows = [], []
     for index in _sample_clips(project.clips, samples):
         clip = project.clips[index]
-        offset = clip["frames"] // 2
+        # Where a sample may be taken. A crossfade puts the first `transition`
+        # frames of a clip in a tractor with the clip before it, so near the
+        # start of a clip the frame on screen is two pictures, not this one --
+        # and comparing it to the source would fail an edit that is right.
+        low = project.transition if index else 0
+        high = clip["frames"]
+        middle = max((low + high) // 2, low)
+        offset = middle
         # A title is drawn over the picture, so a frame under one is no longer
         # a frame of the source. Step along the clip to a sample the titles
         # leave alone -- the check is about which source frames are on screen,
         # and it should not be reading text it put there itself.
         for delta in (0, 8, -8, 16, -16, 24, -24, 32, -32):
-            candidate = clip["frames"] // 2 + delta
-            if (0 <= candidate < clip["frames"]
+            candidate = middle + delta
+            if (low <= candidate < high
                     and not project.title_over(clip["at"] + candidate)):
                 offset = candidate
                 break
@@ -1251,7 +1517,8 @@ def check_render(project, path, work_dir, width=270, crf=34, samples=3):
             problems.append("could not pull a render frame at %.3f s" % at)
             continue
 
-        reference, mid = _reference_clip(project, index, work_dir, width, crf)
+        reference, mid = _reference_clip(project, index, work_dir, width, crf,
+                                         offset=offset)
         if not reference:
             problems.append("could not render a reference for clip %d" % index)
             continue
@@ -1495,7 +1762,153 @@ def check_fade(project, path, work_dir, proof=None, wav=None, width=140, crf=36)
 
 
 # ---------------------------------------------------------------------------
-# check 6: the text is on screen, in the band the plan named, only when it says
+# check 6: the dissolve, measured frame by frame on a probe made of two colours
+# ---------------------------------------------------------------------------
+# The probe is two solid colour clips rather than the plan's own footage, and
+# for the reason the titles check renders a control: footage cannot say how much
+# of it is on screen. Magenta and then white can. Luma is read per frame, so
+# "is the middle frame a mix of the two" has a numeric answer, and so does "does
+# the mix only ever move in one direction".
+X_PROBE_COLOUR = "0xff00ffff"   # opaque magenta, 0xRRGGBBAA
+X_PROBE_SECOND = "0xffffffff"   # opaque white
+X_SPAN = 40        # luma between the two colours below which "how much of each"
+                   # becomes a rounding question
+X_FLAT = 0.04      # how far from a colour a frame may sit and still be that colour
+X_MIX = (0.10, 0.90)   # where in the span the middle of the window has to land
+X_DONE = 0.95      # ... and the frame past it
+
+
+def crossfade_probe(name, profile, shotcut, mlt_version, frames, run=None,
+                    title=""):
+    """Two solid colour clips of `run` frames with `frames` of dissolve between.
+
+    The control is this with `frames=0` at the *same* `run`: the two probes have
+    to agree about where the cut is, or the control measures a different frame
+    and says nothing about this one.
+    """
+    run = int(run or max(frames * 2 + 4, 24))
+    probe_project = Project(name, profile, shotcut, mlt_version,
+                            title or "Crossfade probe: %d frames" % frames)
+    probe_project.add_colour(X_PROBE_COLOUR, run, "outgoing colour")
+    probe_project.add_colour(X_PROBE_SECOND, run, "incoming colour")
+    if frames:
+        probe_project.crossfade(frames)
+    return probe_project
+
+
+def check_crossfade(project, work_dir, width=140, crf=26):
+    """6. The dissolve happens, moves, and lands -- measured in the render.
+
+    Four things are asked of the rendered ramp: the frame before the window is
+    the outgoing colour alone, the middle of the window is neither colour, the
+    frame past it has arrived, and the ramp never goes backwards. A fifth makes
+    the rest worth reading -- the same two colours cut hard measure as a step,
+    so a check that could not tell a dissolve from a cut fails on its control.
+
+    It is measured on a probe rather than on the plan's own clips because two
+    solid colours are the only material where "how much of each" is a number.
+    """
+    name = "crossfade"
+    frames = project.transition
+    if not project.has_crossfade:
+        return _result(name, False, "the plan asks for no crossfades, so there is "
+                                    "nothing here to measure")
+    guard.ensure_dir(work_dir)
+    run = max(frames * 2 + 4, 24)
+
+    curves = {}
+    for wanted in (True, False):
+        label = "dissolve" if wanted else "cut"
+        suffix = "" if wanted else "_cut"
+        try:
+            probe_project = crossfade_probe(
+                "%s_xfade%s" % (project.name, suffix), project.profile,
+                project.shotcut, project.mlt, frames if wanted else 0, run=run)
+            path = probe_project.write(os.path.join(
+                work_dir, "%s_xfade%s.mlt" % (project.name, suffix)))
+        except (PlanError, OSError) as exc:
+            return _result(name, False, "could not write the %s probe: %s"
+                                        % (label, exc))
+        mp4 = os.path.join(work_dir, "%s_xfade%s.mp4" % (project.name, suffix))
+        if os.path.isfile(mp4):
+            os.remove(mp4)
+        ok, detail, _info = render_video(probe_project, path, mp4, width=width,
+                                         crf=crf)
+        if not ok:
+            return _result(name, False, "no %s picture: %s" % (label, detail))
+        curves[wanted] = _luma_curve(mp4, (width // 2, width // 2))
+        if len(curves[wanted]) <= frames * 3:
+            return _result(name, False, "the %s probe measured %d frame(s) of "
+                                        "luma, which is not a timeline"
+                                        % (label, len(curves[wanted])))
+
+    start, middle = run, run + frames // 2
+    curve = curves[True]
+    before, center = curve[start - 1], curve[middle]
+    last, after = curve[start + frames - 1], curve[start + frames]
+    ramp = curve[start:start + frames]
+    # The two colours as they actually render, not as they were asked for: a
+    # colour's luma is not its brightness, and magenta here is 70, not 0.
+    base, top = curve[0], curve[-1]
+    span = top - base
+    if span < X_SPAN:
+        return _result(name, False,
+                       "the probe's two colours measure %.0f and %.0f luma, too "
+                       "close together to say how much of each a frame holds"
+                       % (base, top))
+
+    def share(level):
+        return (level - base) / span
+
+    problems = []
+    if share(before) > X_FLAT:
+        problems.append("frame %d, before the window, is %.0f%% of the way to the "
+                        "incoming picture: the dissolve has started early"
+                        % (start - 1, 100 * share(before)))
+    if not X_MIX[0] <= share(center) <= X_MIX[1]:
+        problems.append("frame %d, in the middle of the window, is %.0f%% of the "
+                        "way to the incoming picture -- not between %.0f%% and "
+                        "%.0f%%, so it is %s"
+                        % (middle, 100 * share(center), 100 * X_MIX[0],
+                           100 * X_MIX[1],
+                           "the outgoing picture alone" if share(center) < X_MIX[0]
+                           else "the incoming picture already"))
+    if share(after) < X_DONE:
+        problems.append("frame %d, just past the window, is %.0f%% of the way to "
+                        "the incoming picture: the dissolve has not arrived"
+                        % (start + frames, 100 * share(after)))
+    drops = [(index, ramp[index - 1], ramp[index])
+             for index in range(1, len(ramp)) if ramp[index] < ramp[index - 1] - 3]
+    if drops:
+        problems.append("the ramp goes backwards at %s"
+                        % ", ".join("frame %d (%.0f -> %.0f)"
+                                    % (start + i, a, b) for i, a, b in drops[:4]))
+
+    step = curves[False]
+    control = {"before": round(step[start - 1], 1), "at": round(step[start], 1)}
+    if ((step[start - 1] - base) / span > X_FLAT
+            or (step[start] - base) / span < X_DONE):
+        problems.append("the control -- the same two colours with no dissolve -- "
+                        "measures %.0f then %.0f, not the hard cut it should be, "
+                        "so this check cannot tell a dissolve from a cut"
+                        % (step[start - 1], step[start]))
+
+    detail = ("%d-frame dissolve over frames %d-%d: luma %.0f just before it, "
+              "%.0f at its middle, %.0f at its last frame, %.0f just after"
+              % (frames, start, start + frames - 1, before, center, last, after))
+    detail += ("; the same colours cut hard measure %.0f -> %.0f in one frame"
+               % (step[start - 1], step[start]))
+    rows = [{"frame": start + index, "luma": round(level, 1),
+             "share": round(share(level), 3)}
+            for index, level in enumerate(ramp)]
+    if problems:
+        return _result(name, False, "; ".join(problems) + " [" + detail + "]",
+                       samples=rows, control=control)
+    return _result(name, True, detail, samples=rows, control=control)
+
+
+# ---------------------------------------------------------------------------
+# check 7: the text is on screen, in the band the plan named, only when it says
 # ---------------------------------------------------------------------------
 TITLE_PSNR_MIN = 15.0     # a title changes a lot of pixels ...
 TITLE_PSNR_MAX = 45.0     # ... but the shot under it is still most of the frame
@@ -1729,12 +2142,17 @@ def _changed_blends(original, rewritten):
 
 
 def _title_rides_a_blend(root):
-    """Blends, not disabled, whose b-track carries text.
+    """Blends, not disabled, whose b-track carries text and sits above the picture.
 
     A title drawn by a track filter does not appear here. A title carried by a
     separate track does -- either as a filter on that playlist or as a clip on
     it that carries one -- and that is the shape Shotcut broke: the blend that
     puts it on screen is the blend Shotcut decides the a-frame of.
+
+    The picture track itself is not that shape, and a crossfade puts a blend on
+    it. Its frames carry the text before the blend is handed them, so no
+    a_track can hide them; the `gui` check photographs the text in Shotcut's own
+    window rather than trusting that reasoning.
     """
     def has_text(element):
         return "dynamictext" in ET.tostring(element, encoding="unicode")
@@ -1747,11 +2165,19 @@ def _title_rides_a_blend(root):
                 entry.get("producer") in text_producers
                 for entry in playlist.findall("entry")):
             carries_text.add(playlist.get("id"))
-    video = [track.get("producer")
-             for track in root.find("tractor").findall("track")
-             if track.get("hide") != "video"]
+    tractor = _main_tractor(root)
+    # Track numbers, not the order of the video tracks among themselves: b_track
+    # is an index into this list, and A1 sits in the middle of it.
+    tracks = [track.get("producer") for track in tractor.findall("track")]
+    picture = None
+    for index, producer in enumerate(tracks):
+        playlist = root.find("playlist[@id='%s']" % producer)
+        if playlist is not None and playlist.findtext(
+                "property[@name='shotcut:video']") == "1":
+            picture = index
+            break
     rides = []
-    for transition in root.find("tractor").findall("transition"):
+    for transition in tractor.findall("transition"):
         service = transition.findtext("property[@name='mlt_service']")
         if service not in BLEND_SERVICES:
             continue
@@ -1761,8 +2187,10 @@ def _title_rides_a_blend(root):
             b_track = int(transition.findtext("property[@name='b_track']") or -1)
         except ValueError:
             continue
-        if 0 <= b_track < len(video) and video[b_track] in carries_text:
-            rides.append((service, b_track, video[b_track]))
+        if not 0 <= b_track < len(tracks) or b_track == picture:
+            continue
+        if tracks[b_track] in carries_text:
+            rides.append((service, b_track, tracks[b_track]))
     return rides
 
 
@@ -1936,6 +2364,25 @@ def load_plan(path):
         if fade[key] < 0:
             raise PlanError("fade %s is negative (%.3f s)" % (key, fade[key]))
     fade["audio"] = bool(raw_fade.get("audio", True))
+    # A crossfade is a number of seconds at every cut, or {"seconds": n}. Seconds
+    # because everything else a plan times is in seconds; frames because that is
+    # what a dissolve is made of, and the writer rounds to frames once.
+    raw_cross = plan.get("crossfade") or {}
+    if isinstance(raw_cross, bool):
+        raise PlanError("\"crossfade\" has to be a number of seconds or an object "
+                        "like {\"seconds\": 0.5}")
+    if isinstance(raw_cross, (int, float, str)):
+        raw_cross = {"seconds": raw_cross}
+    if not isinstance(raw_cross, dict):
+        raise PlanError("\"crossfade\" has to be a number of seconds or an object "
+                        "like {\"seconds\": 0.5}")
+    try:
+        crossfade = float(raw_cross.get("seconds", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        raise PlanError("crossfade seconds is not a number: %r"
+                        % raw_cross.get("seconds"))
+    if crossfade < 0:
+        raise PlanError("crossfade is negative (%.3f s)" % crossfade)
     raw_titles = plan.get("titles") or []
     if not isinstance(raw_titles, list):
         raise PlanError("\"titles\" has to be a list of "
@@ -1964,6 +2411,7 @@ def load_plan(path):
                os.path.splitext(os.path.basename(path))[0])
     return {"name": name, "title": str(plan.get("title") or ""),
             "clips": clips, "fade": fade, "titles": titles,
+            "crossfade": crossfade,
             "path": os.path.abspath(path)}
 
 
@@ -1979,6 +2427,8 @@ def build(plan_path, out_root=None, width=270, crf=34, samples=3, checks=None):
     project = Project(plan["name"], profile, title=plan["title"])
     for clip in plan["clips"]:
         project.add_clip(clip["source"], clip["in"], clip["out"], clip["label"])
+    if plan["crossfade"]:
+        project.crossfade(profile.frame(plan["crossfade"]))
     if plan["fade"]["in"] or plan["fade"]["out"]:
         project.set_fade(plan["fade"]["in"], plan["fade"]["out"],
                          plan["fade"]["audio"])
@@ -1992,6 +2442,9 @@ def build(plan_path, out_root=None, width=270, crf=34, samples=3, checks=None):
     order = ["xml", "effects", "lengths", "render"]
     if project.has_fade:
         order.append("fade")
+    if project.has_crossfade:
+        order.append("crossfade")
+        order.append("gui_xfade")
     if project.has_titles:
         order.append("titles")
         order.append("shotcut")
@@ -2008,7 +2461,8 @@ def build(plan_path, out_root=None, width=270, crf=34, samples=3, checks=None):
     if "effects" in wanted:
         results.append(check_effects(path))
     if "lengths" in wanted:
-        results.append(check_lengths(path, project.clips, profile))
+        results.append(check_lengths(path, project.clips, profile,
+                                     transition=project.transition))
     if "render" in wanted:
         results.append(check_render(project, path, os.path.join(folder, "check"),
                                     width=width, crf=crf, samples=samples))
@@ -2020,6 +2474,9 @@ def build(plan_path, out_root=None, width=270, crf=34, samples=3, checks=None):
         results.append(check_fade(project, path, os.path.join(folder, "check"),
                                   proof=rendered.get("mp4"), wav=rendered.get("wav"),
                                   width=width, crf=crf))
+    if "crossfade" in wanted:
+        results.append(check_crossfade(project, os.path.join(folder, "check"),
+                                       width=width, crf=crf))
     if "titles" in wanted:
         results.append(check_titles(project, path, os.path.join(folder, "check"),
                                     width=width))
@@ -2028,6 +2485,13 @@ def build(plan_path, out_root=None, width=270, crf=34, samples=3, checks=None):
         results.append(check_shotcut(project, path, os.path.join(folder, "check"),
                                      width=width, proof=titles.get("mp4"),
                                      control=titles.get("control")))
+    if "gui_xfade" in wanted:
+        from . import gui as gui_check
+        shot = gui_check.check_crossfade(project, os.path.join(folder, "check"))
+        if shot.get("ran"):
+            results.append(shot)
+        else:
+            not_run.append({"name": shot["name"], "detail": shot["detail"]})
     if "gui" in wanted:
         # Needs a visible desktop and Shotcut's own window. Where there is no
         # desktop the check reports that it did not run, rather than passing
@@ -2046,6 +2510,7 @@ def build(plan_path, out_root=None, width=270, crf=34, samples=3, checks=None):
         "plan": guard.rel(plan["path"]), "project": guard.rel(path),
         "shotcut": project.shotcut, "mlt": project.mlt,
         "frames": project.length, "skipped": skipped, "not_run": not_run,
+        "crossfade": project.transition,
         "clips": [{"source": guard.rel(c["source"]), "in": c["in"],
                    "out": c["out"], "frames": c["frames"],
                    "label": c["label"]} for c in project.clips],

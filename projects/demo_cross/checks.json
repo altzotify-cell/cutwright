@@ -1,0 +1,83 @@
+{
+  "generated": "2026-10-24T16:09:00",
+  "plan": "projects\\demo_cross\\plan.json",
+  "project": "projects\\demo_cross\\demo_cross.mlt",
+  "shotcut": "26.9.27",
+  "mlt": "7.41.0",
+  "frames": 311,
+  "skipped": [
+    "xml",
+    "effects",
+    "lengths",
+    "render",
+    "fade",
+    "crossfade",
+    "titles",
+    "shotcut",
+    "gui"
+  ],
+  "not_run": [],
+  "crossfade": 15,
+  "clips": [
+    {
+      "source": "testclips\\part1_1_60-120.mp4",
+      "in": 0,
+      "out": 119,
+      "frames": 120,
+      "label": "crash into the wall"
+    },
+    {
+      "source": "testclips\\part1_1_60-120.mp4",
+      "in": 1025,
+      "out": 1126,
+      "frames": 102,
+      "label": "he takes a bite"
+    },
+    {
+      "source": "testclips\\part1_1_60-120.mp4",
+      "in": 1415,
+      "out": 1503,
+      "frames": 89,
+      "label": "the word is meat"
+    }
+  ],
+  "titles": [
+    {
+      "text": "in on a dissolve",
+      "in": 36,
+      "out": 101,
+      "frames": 66,
+      "position": "middle",
+      "size": 64
+    }
+  ],
+  "checks": [
+    {
+      "name": "gui_xfade",
+      "ok": false,
+      "ran": true,
+      "detail": "at the middle of the dissolve the picture measures green 0: Shotcut is showing the outgoing colour alone, with no ramp at all [Shotcut's own preview: green 0 at the middle of the 15-frame dissolve (magenta 0, white 255), 255 past it]",
+      "samples": [
+        {
+          "what": "middle",
+          "mean": [
+            255,
+            0,
+            254
+          ],
+          "fraction": 0.612
+        },
+        {
+          "what": "past",
+          "mean": [
+            255,
+            255,
+            255
+          ],
+          "fraction": 0.9
+        }
+      ],
+      "png": "C:\\Users\\user\\Desktop\\Cutwright\\projects\\demo_cross\\check\\demo_cross_gui_xfade_middle.png"
+    }
+  ]
+}
