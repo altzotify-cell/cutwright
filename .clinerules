@@ -1,0 +1,36 @@
+# Cutwright agent rules
+
+## Start of every task (cheap start, no exploring)
+1. Read `HANDOFF.md` (short; status, rules, plan).
+2. Read the last 3 entries of `COMMS.md` and the last 40 lines of `LOG.md`.
+3. Tell the owner in 3 lines: current phase, next step, anything blocked. Then wait for
+   the go-ahead. Do not start coding before this.
+4. Never read `HANDOFF_FULL.md` whole. Use `grep -n "^## \|^### " HANDOFF_FULL.md`, then
+   read only the section you need.
+
+## While working
+- Small targeted edits. Never rewrite a whole file to change a few lines. Keep any
+  single write under ~3,000 characters.
+- Do not open big generated files, videos, `.mlt` dumps, or long logs whole. Use
+  head, tail, grep, or a line range.
+- Every write to the project goes through `cutwright/guard.py`.
+- Never claim something works without quoting the check or command output that shows
+  it. `not_run` is not a pass.
+- Never print, commit or paste `keys.env`, API keys, `voices/`, `models/`, `venvs/`.
+- Do not run `recap.py` with `--force`, `init`, or `collect` unattended.
+- Windows/PowerShell: no `Set-Content`/`Out-File` (BOM); use `git commit -F`, not `-m`.
+
+## After every breakthrough (before doing anything else)
+1. Add a dated entry to `LOG.md`: what changed and the proof (command + result line).
+2. Update the Current status block in `HANDOFF.md`.
+3. If a decision or surprise came up, add an entry to `COMMS.md`.
+4. Commit with `git commit -F`, then push.
+
+## When stuck
+- After two failed attempts at the same problem, stop. Write a `BLOCKED` entry in
+  `COMMS.md` (commit hash, files, what you tried, the real output, one question). Do not
+  try a third time.
+
+## Keeping costs low
+- Context is re-read on every request. When it passes about 60%, or a phase finishes,
+  do the "after every breakthrough" steps, then tell the owner: "Start a new session."
