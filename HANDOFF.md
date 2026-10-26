@@ -226,6 +226,199 @@ needs to be.
 
 ---
 
+## Decisions so far (owner + consultant, 2026-10-26)
+
+- **Execution agent:** DeepSeek V4 Flash through Cline, on the owner's machine. The
+  owner reports it accepts images. **Unverified**: test by sending Cline one frame
+  or contact sheet and asking what is in it, before building Phase 2 around vision.
+- **Consultant:** Claude in the free web app. No Claude API spend for now.
+- **Budget:** start with about $5 of DeepSeek credit and hold the rest. Measure what
+  Phase 0 and Phase 1 actually cost, then top up. Check refund terms and minimums
+  before paying. Revisit a Claude API balance only if the image test fails.
+- **Channel:** `COMMS.md` for agent <-> consultant, `LOG.md` for progress, this file
+  for plan and status.
+- **Dropped:** `dylanler/AI-auto-narrator`; undo/redo from cli-anything-shotcut.
+- **RecapStudio:** the new tree **replaces** `vendor/recapstudio/` (owner decision).
+- **Default voice engine:** Edge-TTS, voice `en-US-ChristopherNeural`. The owner reports it
+  works, so no test step is planned. Paid engines only with explicit approval and the
+  owner's own keys.
+
+## RecapStudio as of 2026-10-26 (read from the owner's upload `RecapStudio_github.zip`)
+
+Read by the consultant, first pass: README.md, COMIC_RECAP_GUIDE.txt, voices/README.txt,
+keys.env.example, config.json, project.json, segments.json, the comic prompt, MENU.bat,
+the module and engine lists in `studio.py`, headers of `tts_worker.py` and
+`setup_engines.py`. Second pass (owner asked for a deep read): in `recap.py`, the
+constants and config defaults, every interactive prompt, `step_subs`, `step_sheets`,
+`step_index`, `step_tts` and its manifest logic, `step_say`, `make_edge`, `seg_media`,
+`build_items`, `status_lines` / `step_check`, `step_comic`; in `studio.py`, project
+creation and the HTTP routes.
+**Still not read:** `step_collect` (yt-dlp download flow), the Premiere XML and VideoPad
+writers, the comic geometry and camera code (`comic_detect`, `render_comic_clip`), the
+other engines' internals, `app.js`. **Nothing was run.** Treat every statement about what
+works as "documented", not "tested".
+
+### The copy in `vendor/recapstudio/` is out of date
+
+Same project, much bigger. `recap.py` went from 130 KB to 194 KB (1,434 changed
+lines), `studio.py` +214 changed lines, `web/app.js` +482. New files: `README.md`,
+`.gitignore`, `COMIC_RECAP_GUIDE.txt`, `_template/1_import_comic.bat`,
+`_template/PASTE_THIS_TO_CLAUDE_comic_recap.txt`, `keys.env.example`,
+`setup_engines.py`, `tts_worker.py`, `voices/README.txt`. `vendor/MANIFEST.sha256`
+describes the old files. Re-vendoring or referencing the new tree is a Phase 3 decision
+(see below); either way, record the commit and hashes in `PROVENANCE.md`.
+
+### What is new
+
+**Voices.** Six engines, chosen per project in `config.json` (`tts.engine`) or with
+`--engine`:
+
+| engine | runs | cloning | notes |
+|---|---|---|---|
+| Edge-TTS | online, free | no | several named voices |
+| Kokoro | offline, CPU | no | about 350 MB; many US/UK voices |
+| Pocket TTS | offline, CPU | yes | English |
+| Chatterbox | offline | yes | four variants (nano, turbo, english, multilingual); `[laugh]` style tags; output carries Resemble AI's Perth watermark |
+| ElevenLabs | online, paid | - | multi-key support |
+| MiniMax | online, paid | - | multi-key support |
+
+- Chatterbox and Pocket run in their **own virtualenvs** (`venvs/`) through
+  `tts_worker.py`, which speaks JSON lines over stdin/stdout (`load`, `say`, `quit`),
+  so PyTorch cannot break the main tool.
+- `setup_engines.py` (standard library only, has `--dry-run`) installs engines and
+  models and writes `models/engines.json`. Models and venvs are gitignored and several
+  GB.
+- Voice cloning uses reference clips in `voices/` (gitignored). Only clone voices
+  the owner has the right to use.
+- Per-segment `speed` (0.6 to 1.4) for Kokoro, Chatterbox and Pocket.
+- `project.json` `tts_mode`: `plain`, `light`, `heavy`, `kokoro`, `chatterbox`/`pocket`
+  (these change how the script is written: tags, contractions, segment length under
+  about 60 words).
+- API keys live in `keys.env` (gitignored; template `keys.env.example`).
+
+**Comic / manga module (`comic_recap`).** Input is `.cbz`, `.cbr`, `.pdf` or a zip of
+page images, not a video.
+1. `recap.py comic --file <path>` unpacks pages to `pages/pNNN.png`, saves page sizes
+   and panels (`pages/panels.json`), and writes review PDFs
+   `comic_review/comic_for_claude_partNN_pNNN-pNNN.pdf`: clean pages with a 0.0 to 1.0
+   ruler grid and a "PAGE N" header, 30 pages per PDF.
+2. **A vision model looks at the PDF and decides the panels**, giving each shot as a box
+   `[x0,y0,x1,y1]` in page fractions (config `comic.panel_mode`: `claude` or `auto`).
+   Reading direction `rtl` for manga.
+3. Segment fields: `page`, `focus` (list of box stops, or `"page"`), `motion` (`auto`,
+   `push_in`, `pull_out`, `drift`, `still`, `pan_left/right/up/down`, `shake`),
+   `zoom`, `anchor`, `enter`, `caption`, `chapter`, plus the usual `narration`,
+   `subtitle`, `speed`.
+4. Each clip is cut to its voice-over length; the camera moves over the panels
+   (`render_comic_clip`). 16:9 and 9:16 (TikTok) both supported.
+- Documented limits: a speech balloon crossing the gutter can merge two panels;
+  `.cbr` needs 7-Zip or Windows tar; captions are not burned into the mp4 (use the
+  Premiere XML); rendering takes roughly 1x to 2x real time per CPU core.
+
+**Modules now:** `movie_recap`, `show_recap`, `comic_recap`, `nba_minidoc`,
+`nba_story`, `real_story`, `ranking`. Each has its own `PASTE_THIS_TO_CLAUDE_<module>.txt`.
+`project.json` also has `style` (`retell`, `commentary`, `mixed`), `target_length`,
+`platform`, `voice_card`, `fact_check`, `music`, `captions`.
+
+### What this means for the agent integration
+
+- **`recap.py` is already a command-line tool.** Its steps are: `init`, `module`,
+  `subs`, `index`, `sheets`, `say`, `comic`, `collect`, `tts`, `review`, `premiere`,
+  `videopad`, `video`, `srt`, `tiktok`, `check`, `demo`, `missing`, `collect_one`.
+  Useful flags: `--engine`, `--only <ids>`, `--preview`, `--force`, `--yes`,
+  `--file`, `--text-file`, `--tts-file`, `--out`. So Phase 3 should **call these steps
+  from Cutwright**, not port them. Which steps still stop to ask a human (engine pick,
+  guided `collect`) and need non-interactive flags is unknown; the agent must find out.
+- **The manual step to remove** is "attach one PDF and paste the prompt into a chat".
+  The agent reads the images itself and writes `segments.json`. For comics that means
+  up to 30 page images per part: look once, write the panel boxes to a file, and work
+  from the file afterwards (see cost control above).
+- **Output formats differ.** RecapStudio produces Premiere XML, VideoPad `.vpj`, or a
+  finished mp4 via ffmpeg. Cutwright produces Shotcut `.mlt`. A bridge from
+  `segments.json` plus the generated audio to a Cutwright plan is new work (Phase 3f).
+- **Keys and secrets.** `keys.env` must never be committed, printed into `LOG.md` or
+  `COMMS.md`, or pasted to the consultant. Check that Cutwright's `.gitignore` also
+  ignores `keys.env`, `voices/`, `models/` and `venvs/`.
+- **Licences.** The README says each engine and model has its own licence and to check
+  before redistributing audio or models; Chatterbox adds a watermark. Cutwright must
+  not bundle models or voices.
+
+### Second-pass findings from `recap.py` (how to drive it from an agent)
+
+1. **Each project folder carries its own copy of `recap.py`.** `studio.py` creates a
+   project with `shutil.copytree(_template, Projects/<name>)`, and `recap.py` starts with
+   `os.chdir(<its own folder>)`. So the call is `python <project>\recap.py <step>`, and a
+   project's copy can go stale when `_template/recap.py` changes (the studio has a
+   "refresh engine" route that overwrites it). Cutwright must check which copy it is
+   running.
+2. **Non-interactive mode exists: `RECAP_NONINTERACTIVE=1`.** It makes `ask_text` and
+   `ask_choice` return their defaults and stops `get_keys` from prompting. What it does
+   **not** cover: the guided `collect` loop (an `input()` per shot, plus a yes/no on
+   failed downloads), and MiniMax's "Enter voice_id" prompt. `tts` needs `--engine <name>`
+   and `--yes` to run without questions. Consequence: **do not use `init`** (with the env
+   var it only writes defaults). The agent writes `project.json` itself; its fields are
+   `module`, `topic`, `style`, `target_length`, `platform`, `tts_mode`, `voice_card`,
+   `fact_check`, `music`, `captions`, and `reading` (`ltr`/`rtl`) for comics.
+3. **Side effects to expect.** Several steps call `reveal()`, which opens an Explorer
+   window on Windows. `step_tts` rewrites `config.json` (it saves the chosen engine).
+   `tts --force` deletes every `audio/*.mp3`. `comic --force` deletes the imported pages
+   and re-detects panels, **destroying hand edits in `pages/panels.json`**. The agent
+   must not pass `--force` without a COMMS entry.
+4. **Everything is files by convention.** In: `segments.json`, `project.json`,
+   `config.json`, `footage/`, `images/`, `music/`, `subs/`, `keys.env`. Made: `sheets/`,
+   `audio/` (plus `audio/_manifest.json`), `audio_preview/`, `clips/` (plus
+   `_cache.json`), `gfx/`, `premiere_sequence.xml`, `recap_final.mp4`,
+   `recap_subtitles.srt`, `chapters.txt`, `shot_manifest.csv`, `credits.txt`,
+   `review_sheet.csv`, `tiktok_out/`, `STATE.md`.
+5. **`segments.json` shape:** `{"youtube": [segments], "tiktok": {"part1": [segments]}}`.
+   Segment fields found in the code: `id` (required, unique), `narration`, `src_start`,
+   `src_end`, `src`, `image`, `need_visual`, `keep_audio`, `subtitle`, `caption`, `rank`,
+   `chapter`, `shot`, `speed`, and the comic fields (`page`, `focus`, `panel(s)`,
+   `motion`, `zoom`, `anchor`, `enter`, `shake`).
+   **Picture lookup order:** `image`, then `src`, then a footage file named after the
+   segment id, then an image named after the id, then the one big source video (needs
+   `src_start`), else a **slate**.
+6. **A missing picture does not fail the build; it renders a slate card** saying why.
+   So "the build finished" proves little. Cutwright checks must list slates and fail
+   on them. `status_lines` (`check`) already counts "segments without footage".
+7. **Voice length drives the picture, not the reverse.** `build_items` fits the audio
+   first, then trims the footage or holds the last frame to match, and prints
+   "perfect fit", "footage trimmed by Ns" or "last frame held Ns". It warns when a
+   rendered clip differs from the voice by more than 1.5 frames. Clips are cached by a
+   key of source signature, range, frames, size and fill, so re-runs are incremental.
+   TTS is incremental too: `audio/_manifest.json` stores a text hash and an engine
+   signature per segment, so only new or edited lines are re-voiced; changing the
+   engine or voice triggers a "re-voice the others?" question that `--yes` answers
+   yes to.
+8. **`check` writes `STATE.md`**, described in the code as "paste this into a new chat to
+   resume". It is RecapStudio's own handoff mechanism. The agent should read it before
+   acting and run `check` after each step. `check` also reports which tools and Python
+   modules are missing (`ffmpeg`, `ffprobe`, `yt-dlp`, `requests`, `edge_tts`, and for
+   comics `PIL`, `numpy`, `fitz`).
+9. **Overlap with Cutwright, and where Phase 2 plugs in.**
+   - RecapStudio's `subs` extracts every text track to `subs/*.srt` (and `.ass`),
+     skips picture-based tracks (PGS, DVD: "needs OCR"), picks the English track, and
+     for several episodes writes `subs/ALL_EPISODES_for_claude.txt`. It does none of
+     Cutwright's validation. **Cutwright's `subs` gate should own subtitle trust**; its
+     cleaned transcript is what the agent reads.
+   - RecapStudio's sheets: `index` makes up to 8 contact sheets per file (4x4 tiles,
+     timestamps burned in, roughly one sheet per five minutes), and `sheets` makes one
+     per segment flagged `need_visual`. That is coarse. **Phase 2's shot-boundary
+     coverage sheets slot in here** as a better `index`, and the agent's `need_visual`
+     flags remain the second route.
+   - Picture-based subtitle tracks are an unsolved case (OCR); it is the same gap noted
+     under burned-in subtitles in Phase 2b.
+10. **`studio.py` is a local web server** (`ThreadingHTTPServer` on 127.0.0.1, with a
+    host allow-list) exposing `/api/projects`, `/api/jobs`, `/api/keys`, `/api/tools`,
+    `/api/voicelab/say` and others. It is the UI's backend. The agent should use the
+    command line, not this server. Never expose its port.
+11. **Edge-TTS** needs the `edge_tts` Python module and an internet connection. The
+    default voice is `en-US-ChristopherNeural`, rate `+0%`. The owner confirms it works.
+    If it ever stops (it depends on an online service), Kokoro is the offline fallback.
+12. **API keys:** `load_env` reads `keys.env` from the project folder, `Projects/`, or the
+    studio folder, and a `KeyPool` rotates through comma-separated keys. Keys are only
+    ever read from the environment; nothing in Cutwright should print them.
+
 ## Work plan
 
 ### Phase 0: finish the crossfade (already designed, smallest step)
@@ -261,18 +454,114 @@ Done when: `BORROW.md` exists and every borrow-list row is marked *copy shape*,
 Done when: on a test clip with a known silent stretch, the sheet appears, is tagged,
 and the check fails if it is removed.
 
+### Phase 2b: footage with no usable transcript (extends Phase 2)
+
+Nothing here is built. The consultant read only the README's description of
+`transcribe.py`, not the code; the agent must read it before relying on this.
+
+The agent picks a mode from the result of `subs` (per video first; per stretch once
+the versatility target below is in scope), and **says which mode it chose**
+in the digest. The existing rule stays: it stops and tells the owner before
+switching to a fallback, rather than substituting one quietly.
+
+1. **Speech, no subtitles.** Use the whisper.cpp fallback in `transcribe.py`, gated
+   like any transcript. Cautions: `models/ggml-small.en.bin` is English only, so
+   other languages need another model (owner to decide); whisper invents text over
+   music and silence, so the gate must stay on.
+2. **Little or no speech** (silent film, gameplay, music, b-roll): add a
+   **visual-only mode**. No transcript. Beats are groups of shots from ffmpeg scene
+   detection, ranked by shot-change density and loudness changes (ffmpeg loudness or
+   silence detection). Because there is no text to trust, **every** beat gets a
+   contact sheet, not only silent ones. `moments.json` gets `source: visual_only`
+   and the digest states that no dialogue exists. The agent writes `expected` from
+   the sheets, and the existing `verify` grading still applies.
+3. **Burned-in subtitles** are pixels, not a text track, so `subs` finds nothing.
+   OCR could read them. Not planned; park unless the owner has such footage.
+
+Cost control (applies to Phase 2 and 2b): run all detection in plain code first;
+downscale sheets; the agent looks at each sheet once and saves its reading to a
+file; later turns read the file, not the image.
+
+Done when: a clip with no subtitles and no speech goes from video to a candidate
+moments file with sheets, and a check fails if any beat lacks a sheet; and a clip
+with speech but no subtitles goes through whisper and the gate.
+
+### Versatility target: English footage of any kind
+
+Owner decision 2026-10-26: footage is mostly English, and the tool should work
+across *kinds* of English footage, not only dialogue-heavy.
+
+**Design rule:** coverage (sheets) is the base layer; a transcript is an optional
+signal on top. Decide per *stretch* of a video, not per video. A stretch is
+dialogue (transcript trusted), mixed, or no-speech (sheets only). One episode can
+contain all three.
+
+| footage type | speech | what carries the meaning | handling |
+|---|---|---|---|
+| shows, films, anime | yes, subs likely | transcript, plus sheets at silent shots | existing path + Phase 2 |
+| commentary-driven (sport, gameplay with voiceover, reviews) | yes | the picture; words describe opinion, not events | transcript is low-trust for "what happened"; sample more sheets |
+| narrated documentary | yes | narration and footage together | transcript usually aligned with picture |
+| music video, concert | lyrics only | picture and audio energy | whisper transcribes songs poorly; treat as low-trust |
+| silent, ambient, b-roll | none | picture | visual-only mode (2b) |
+| gameplay without commentary | none | picture, motion | visual-only mode (2b) |
+| comics, manga (images, not video) | none | the pages | RecapStudio `comic_recap`; vision model reads ruler-grid PDFs (Phase 3d) |
+
+Commentary-driven footage is the "confident but wrong" case at full scale: the
+transcript is fluent and says nothing about what is on screen. Do not trust it for
+events without sheets.
+
+**Test matrix (owner supplies the clips; `testclips/` is gitignored):** one short
+English clip of each type above. Done when, for every clip, the pipeline chooses a
+mode per stretch, produces moments with sheets, and passes its checks, with the
+result recorded in `LOG.md`. Build and test on the dialogue clip and the silent clip
+first; they are the two extremes.
+
+**Not yet:** genre presets. RecapStudio's existing prompts (`movie_recap`,
+`show_recap`, `nba_minidoc`, `nba_story`, `ranking`, `real_story`) become prompt
+profiles in Phase 3, after the core modes pass the matrix.
+
 ### Phase 3: RecapStudio integration (replaces the paste step)
 
-- Map RecapStudio's stages to subcommands with `--json`: extract subs, contact
-  sheets, index footage, collect footage, generate voice, build video, build
-  subtitles, build TikTok cut (see `vendor/.../_template/*.bat`).
-- The agent reads the digest and writes `segments.json` / `plan.json` itself;
-  retire `PASTE_THIS_TO_CLAUDE_*.txt` as a manual step (keep as reference prompts).
-- Everything the integration writes goes through `guard.py`.
-- Decide and write down: does Cutwright call RecapStudio's `recap.py`, or port the
-  stages? Phase 1 findings decide this.
-Done when: an agent, given only a video path and the CLI, can run from subtitles to a
-built project with no human paste step.
+Depends on Phase 1 (read the new tree properly) and the section "RecapStudio as of
+2026-10-26" above. Split so each piece can ship alone:
+
+- **3a. Replace the vendored copy (decided).** Replace `vendor/recapstudio/RecapStudio/`
+  with the new tree (60 files, about 0.46 MB; the zip holds no secrets, only
+  `keys.env.example`). Regenerate `vendor/MANIFEST.sha256`, update the README's layout
+  counts (it says 89 files, 0.68 MB), record the source and hashes in `PROVENANCE.md`,
+  and extend `doctor` to report RecapStudio's engines (`models/engines.json`), 7-Zip,
+  ffmpeg, and the Python modules `check` lists. Writes stay inside the Cutwright
+  folder, so `guard.py` allows this. Commit the replacement on its own, before any
+  wrapper code, so it can be reverted cleanly.
+- **3b. Wrap the steps.** `python -m cutwright recap <step> --json`, calling the
+  project's own `recap.py` as a subprocess (see second-pass findings 1 to 3: set
+  `RECAP_NONINTERACTIVE=1`, write `project.json` directly, never `init`, `collect` or
+  `--force` unattended). Start with the non-interactive,
+  cheap ones: `subs`, `sheets`, `index`, `check`, `missing`, `say --text-file`.
+  Every write still goes through `guard.py`.
+- **3c. Voice.** Wrap `tts` as `recap.py tts --engine edge --yes` with
+  `RECAP_NONINTERACTIVE=1`. Edge-TTS is the default (owner-confirmed working). Use
+  `--preview` (first three segments) and `--only <ids>` for cheap re-takes. Checks: an
+  audio file exists for every segment with narration, its duration is plausible for the
+  word count (about 150 words a minute), loudness is within range (reuse Cutwright's dB
+  checks), and `audio/_manifest.json` has no stale entries. Kokoro is the offline
+  fallback; Chatterbox and Pocket come later (own virtualenvs, voice cloning); paid
+  engines (ElevenLabs, MiniMax) only with explicit approval and the owner's keys.
+- **3d. Comic module.** Wrap `comic` (import) and the render. The agent reads the
+  review PDFs or page images and writes `segments.json`. Needs `PIL`, `numpy` and `fitz` (check with `recap.py check`). Never `--force` the
+  import after hand-editing `pages/panels.json`. Checks: every `page` exists,
+  every box lies within 0 to 1, no segment has empty narration, rendered clip length is
+  close to its voice length, ids unique and increasing. Needs a test comic from the
+  owner (rights are the owner's responsibility).
+- **3e. Prompt profiles.** Turn the seven `PASTE_THIS_TO_CLAUDE_<module>.txt` files
+  into profiles the agent loads by `project.json` `module`. Do this after the core
+  modes pass the versatility matrix.
+- **3f. Bridge to Shotcut.** Segments plus audio to a Cutwright `plan.json`, then
+  `build` to `.mlt`. Decide first whether comic camera moves stay in RecapStudio's
+  ffmpeg render (simplest) or get a native `.mlt` form later (optional).
+
+Done when: an agent, given only a video path (or a comic file) and the CLI, can run
+from input to a built project with no human paste step, on both a video and a comic.
 
 ### Phase 4: borrow from cli-anything-shotcut
 
@@ -314,14 +603,19 @@ Music dipping (now Phase 4 step 1) -> J/L cuts -> per-line captions -> the plann
 2. Does an agent calling a CLI with `--json` satisfy "fully integrate", or is an MCP
    server required now?
 3. Is `altzotify-cell/cutwright` (and RecapStudio) public? If private, the consultant can only see pasted text.
-4. Which execution agent will run each phase? (Whichever has desktop access is the
-   only one that can run melt and Shotcut for the GUI checks.)
+4. ~~Which execution agent?~~ Answered: DeepSeek V4 Flash via Cline (see Decisions).
+5. ~~Footage and language?~~ Answered: mostly English; wants versatility across kinds of English footage (see Versatility target).
+6. ~~Replace the vendored RecapStudio?~~ Answered: yes, the new tree replaces it (Phase 3a).
+7. ~~Default voice engine?~~ Answered: Edge-TTS; no test needed; paid engines only with approval.
+8. Can the owner supply a comic or manga file to test with?
 
 ## Session log (what the consultant actually did on 2026-10-26)
 
 - Listed the zip. Read `HANDOFF.md` and the first 120 lines of `README.md`.
 - Did **not** read: `LOG.md`, `REPORT.md`, `PROVENANCE.md`, any `.py` file, the
   RecapStudio vendor files, or any GitHub repo.
+- Read the uploaded `RecapStudio_github.zip` in two passes (docs and structure, then the
+  main parts of `recap.py` and `studio.py`; no code run) and recorded the findings above.
 - Wrote this plan. No code, `.mlt` file or project was changed.
 - Added the communication and consultant protocols, and `COMMS.md`. A test fetch of the
   RecapStudio URL failed and a search did not find the repo; fetching from GitHub is
