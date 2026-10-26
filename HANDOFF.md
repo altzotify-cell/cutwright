@@ -1,5 +1,348 @@
 # Handoff
 
+**Updated 2026-10-26. Read this top section first; the 2026-10-24 crossfade handoff
+is kept unchanged below it.**
+
+## Status of this update
+
+Nothing in the code was changed. This section is a plan, written before any work
+starts, so that it survives running out of free-plan credits. Any agent (Cline,
+Claude Code, a chat model) can pick it up from here.
+
+Two limits on how far to trust it:
+
+- The consultant session (Claude, chat, free plan) had **no network and no way to
+  clone repos**. Every statement below about `shotcut-mcp`, `cli-anything-shotcut`,
+  NarratoAI and RecapStudio comes from the owner's own notes, not
+  from reading those repos. Phase 1 exists to fix that.
+- Licences were **not checked**. "Apache 2.0, so copying is clean" is the owner's
+  note about cli-anything-shotcut and is unverified. Shotcut itself is GPL. Do not
+  copy code out of any repo until its LICENSE file has been read (Phase 1).
+
+## What the owner wants (restated from the 2026-10-26 prompt)
+
+1. **Stop hand-building editor controls.** Shotcut's CLI wrappers already implement
+   clips, trims, splits, moves, transitions, text overlays and filters, rendered
+   through `melt` as a subprocess and emitting native `.mlt` files that open in the
+   Shotcut GUI. Copy their approach instead of designing each control in Cutwright.
+   Sources named: `NoBanks/shotcut-mcp`, `mltframework/shotcut`, and the
+   `cli-anything-shotcut` package.
+2. **Integrate RecapStudio fully** (`github.com/altzotify-cell/RecapStudio`) so the
+   agent calls its tools directly. Today a human pastes `PASTE_THIS_TO_CLAUDE_*.txt`
+   into a chat; the agent should replace that step.
+3. **Better perception than NarratoAI.** Today the AI reads transcript/subtitles,
+   emits a JSON, a script runs ffmpeg for screenshots where the AI was unsure. Two
+   blind spots to close:
+   - *Silent stretches*: no dialogue means no signal, so nothing gets tagged.
+   - *Confident-but-wrong*: the transcript says "let's go to the beach", the scene
+     shows a spaceship, and no uncertainty tag fires.
+   Proposed fix: **coverage sheets**. Cutwright already detects shot changes with
+   ffmpeg, so drop one contact sheet at every shot boundary that has no overlapping
+   dialogue, plus a floor of one per few minutes.
+4. **Keep verification.** Every feature added must come with a check. That is what
+   distinguishes Cutwright from the tools it borrows from.
+5. Reference repo also named: `linyqh/NarratoAI`.
+
+## Borrow list (from the owner's notes; effort estimates are theirs)
+
+From `cli-anything-shotcut`:
+
+| Borrow | Gives Cutwright | Effort |
+|---|---|---|
+| Ducking + volume envelopes | Music under voice, the biggest gap | Low: copy the MLT XML shape, wrap in dB checks |
+| Transitions (add/remove/set; luma/mix/composite) | Crossfades, dissolves | Low-med |
+| Blend modes / opacity / PIP | Overlays, watermarks, insets | Low |
+| Preview bundles, live preview, trajectory | Agent can see the rough cut | Medium |
+| SKILL.md format + `npx skills install` | One-command adoption by any agent | Low |
+| `--json` on everything | Machine-readable output | Low |
+| Undo/redo session model | Try, check, undo, retry | Medium, or skip |
+
+From NarratoAI:
+
+| Borrow | Gives Cutwright | Effort |
+|---|---|---|
+| Sonilo BGM/SFX API | Royalty-free music and effects | Low-med |
+| Tavily plot-search pre-step | More accurate scripts | Low |
+| Subtitle mask (percent-positioned blur) | Recaps over hardsubbed footage | Medium |
+| Keyframe batching (interval/batch/concurrency) | Coverage sheets at scale | Low |
+| TwelveLabs Pegasus option | Motion-aware understanding (fights) | Low, needs key |
+| Gemini Flash Lite / SiliconFlow Qwen-VL | Cheap hosted captioning | Config only |
+
+## Consultant's adjustments to that list
+
+- **Do not borrow transitions or envelopes before the crossfade edit lands.** The
+  2026-10-24 work found that Shotcut sets `disable=1` on V1's `frei0r.cairoblend`
+  on every Ctrl+S, silently killing any flat multitrack `luma`/opacity dissolve.
+  Borrowed transitions will very likely be exactly that shape. Every borrowed
+  transition, blend or envelope must survive a real Ctrl+S and pass `gui_xfade`
+  or an equivalent, or it is not borrowed, only imported.
+- **Skip undo/redo.** A plan is JSON and `build` regenerates the project; that is
+  already a clean retry loop.
+- **Network-dependent borrows (Sonilo, Tavily, TwelveLabs, hosted captioners) are
+  optional and default off.** The README says Cutwright is standard library only,
+  and the owner is credit-sensitive. Put them behind a config flag and a separate
+  module so the core stays dependency-free.
+- **Confident-but-wrong needs one more mechanism than silent coverage.** Coverage
+  sheets at shot boundaries catch silence. To catch the beach/spaceship case, also
+  sample a small, fixed fraction of dialogue beats that were *not* flagged and
+  attach a sheet to them. This is the consultant's suggestion, not the owner's;
+  keep it only if it proves cheap.
+- **Define "integrate fully" before building it.** Cheapest version: RecapStudio's
+  numbered steps become Cutwright subcommands with `--json`, and the agent calls the
+  CLI. An MCP server can wrap that later. Do not start with the MCP server.
+
+## Ground rules for every step
+
+1. Each step is independently shippable. Finish, run checks, commit, then stop or go on.
+2. Every write goes through `cutwright/guard.py`. No exceptions, including RecapStudio
+   integration code.
+3. A borrowed feature gets a Cutwright check before it counts as done.
+4. Read the LICENSE of a source repo before copying from it. If unclear, copy the
+   MLT XML *shape* (a file format) and write the code fresh.
+5. Record every borrowed file, its repo, commit and licence in `PROVENANCE.md`.
+6. Gotchas from the old handoff still apply (no BOM, `git commit -F`, small editor
+   writes, `not_run` is not `pass`).
+
+## Communication protocol (agent <-> consultant)
+
+Three files, three jobs. Do not merge them.
+
+| file | job | changes |
+|---|---|---|
+| `HANDOFF.md` | The plan, the rules, and a short **Current status** block. The source of truth for "where are we". | Rarely; the status block after each breakthrough |
+| `LOG.md` (exists) | Running log. One dated entry per breakthrough *and* per dead end. | Often, append-only |
+| `COMMS.md` (new) | The channel between agent and consultant: questions, blockers, review requests, answers. | Often, append-only |
+
+Why `COMMS.md` is separate from `HANDOFF.md`: a channel grows every time someone
+speaks, and the consultant has to re-read whatever file it is given. Mixing them
+buries the plan under chatter and makes the one file everyone must read the
+longest. Keep the plan short; let the channel be long.
+
+### How messages travel
+
+The consultant (Claude, in a chat) cannot write to GitHub or touch the repo. The
+owner is the relay.
+
+- **Agent to consultant:** the agent appends an entry to `COMMS.md`, commits and
+  **pushes**. The owner pastes into the consultant chat either the entry text
+  (always works) or the raw link to it, on its own line with a space after it.
+  Link to a specific commit, not `main`, so the text cannot change or lag.
+- **Consultant to agent:** the consultant replies in chat in the same entry
+  format. The owner pastes it at the end of `COMMS.md` (or tells the agent to)
+  and commits.
+
+Limits to know about (as of 2026-10-26, not all tested):
+
+- The consultant's fetch tool only opens URLs it was given cleanly in a message
+  or found by search. A first test on the RecapStudio URL failed: the link was
+  stuck to the next word in the message, and a search did not find the repo, so it
+  may be private. **A private repo cannot be fetched at all. Paste the text.**
+- Raw GitHub content can lag a few minutes after a push.
+- Never put API keys or tokens in `COMMS.md`, `LOG.md` or any pushed file.
+
+### Entry format for `COMMS.md`
+
+```
+## C-014 | 2026-10-27 | agent -> consultant | BLOCKED | OPEN
+Commit: a1b2c3d   Files: cutwright/mlt.py L730-754
+Goal: one line.
+Tried: numbered, with the exact command or edit each time.
+Observed: the real output, trimmed to the lines that matter.
+Known / assumed: two short lists, kept apart.
+Ask: the one question or decision wanted.
+```
+
+Types: `BLOCKED`, `QUESTION`, `REVIEW` (please check this diff or design),
+`BREAKTHROUGH` (for the record), `ANSWER`, `INFO`. Status is `OPEN` until the
+other side replies, then `ANSWERED`. IDs only go up. Never edit an old entry;
+add a new one that refers to it.
+
+### After every breakthrough (agent, always, before anything else)
+
+1. Add a dated entry to `LOG.md`: what changed, what proved it (the check output
+   or measurement), what it unblocks.
+2. Update the **Current status** block below (phase, last green commit, next step).
+3. If a decision or surprise came up, add a `BREAKTHROUGH` entry to `COMMS.md`.
+4. Commit with `git commit -F`, then **push**. Nothing was pushed at the
+   2026-10-24 pause; unpushed work is invisible to the consultant and lost if the
+   session dies.
+A step is not finished until its log entry is pushed.
+
+### Current status (agent keeps this block up to date)
+
+```
+Phase: 0 (not started)
+Last green commit: a87f4bf (2026-10-24, nothing pushed)
+Next step: Project.to_xml() crossfade edit, then full build of demo_cross
+Open COMMS entries: C-001
+```
+
+## Consultant protocol (for when things get hard)
+
+### When the agent must stop and escalate
+
+Write a `BLOCKED` or `QUESTION` entry instead of trying again when any of these is
+true:
+
+- The same problem has survived **two** attempts that each changed something.
+- A check fails and the cause is not clear from its own output.
+- A choice has real trade-offs (licence, dependency, interface shape, whether to
+  copy code or reimplement).
+- A refactor would touch more than one phase's files.
+- A check passed that the agent did not expect to, or failed in a way that does
+  not match the theory.
+- Credits or context are running low: write the entry *before* stopping.
+
+Stopping early is cheaper than a fifth attempt. When blocked, do these first:
+change one variable per attempt, keep the path to the failing artifact, and if the
+tree has become confusing, return to the last green commit rather than stack more
+edits on it.
+
+### What the consultant does
+
+1. Restates the problem in one line and separates **known** from **assumed**.
+2. Gives at most three hypotheses, ranked, each with **one cheap test that
+   distinguishes it** (a command, and what output means yes or no).
+3. Recommends one next action, the smallest that moves things. Says what not to
+   do (for example, "do not re-run the 90-second `luma_window_test.py`").
+4. When attempts keep failing, questions the premise: is the goal right, is there a
+   simpler shape, is a check measuring the wrong thing?
+5. Proposes a stop-loss when a path has cost too much: cut scope, take the
+   fallback, or park it with a note.
+6. Reviews claims against evidence. "The check passes" needs the check output.
+   `not_run` is not a pass.
+
+### What the consultant cannot do
+
+It cannot run melt, Shotcut, git or anything on the owner's machine, and it has no
+network inside its sandbox. Every answer is a hypothesis until the agent runs it.
+**The agent must post the result back as a new entry**, pass or fail, so the next
+reader (the consultant, or a fresh session) is not guessing.
+
+### Style of replies
+
+Short, numbered, the recommended action first. Reasoning after, only as long as it
+needs to be.
+
+---
+
+## Work plan
+
+### Phase 0: finish the crossfade (already designed, smallest step)
+
+Do "The edit to make" in the section below. Rebuild `projects/demo_cross`, get
+`crossfade` and `gui_xfade` green, record the Ctrl+S copy in `PROVENANCE.md`.
+**Why first:** it is fully specified, it unblocks Phase 4, and it leaves the repo
+in a state where the existing checks mean something.
+Done when: all nine checks pass on `demo_cross`; committed.
+
+### Phase 1: read-only reconnaissance (no code, cheapest, prevents waste)
+
+Clone and read: `shotcut-mcp`, `cli-anything-shotcut`, `NarratoAI`,
+`altzotify-cell/RecapStudio`. Also compare RecapStudio with the
+copy already in `vendor/recapstudio/` (hashes in `vendor/MANIFEST.sha256`).
+Produce one file, `BORROW.md`, with for each repo: licence, the exact files and
+functions for each item in the borrow list, and anything the owner's notes got wrong.
+Done when: `BORROW.md` exists and every borrow-list row is marked *copy shape*,
+*copy code*, *reimplement* or *drop*.
+
+### Phase 2: coverage sheets (highest value, cheap, uses what exists)
+
+- Take shot boundaries from the existing ffmpeg shot detection in `frames.py`.
+- Take dialogue spans from the gated transcript (`subs.py` / `moments.py`).
+- For each boundary with no overlapping cue, make a contact sheet; add a floor of one
+  sheet per N minutes (default 3, configurable).
+- Tag these in `moments.json` as a new status (for example `silent_unexplained`) so
+  the agent knows they need a look. Optional: the spot-check sample from the
+  adjustments above.
+- Use an interval/batch/concurrency config in the NarratoAI style so large videos
+  do not hammer one process.
+- Add a `verify` check: every silent shot with no sheet is an error.
+Done when: on a test clip with a known silent stretch, the sheet appears, is tagged,
+and the check fails if it is removed.
+
+### Phase 3: RecapStudio integration (replaces the paste step)
+
+- Map RecapStudio's stages to subcommands with `--json`: extract subs, contact
+  sheets, index footage, collect footage, generate voice, build video, build
+  subtitles, build TikTok cut (see `vendor/.../_template/*.bat`).
+- The agent reads the digest and writes `segments.json` / `plan.json` itself;
+  retire `PASTE_THIS_TO_CLAUDE_*.txt` as a manual step (keep as reference prompts).
+- Everything the integration writes goes through `guard.py`.
+- Decide and write down: does Cutwright call RecapStudio's `recap.py`, or port the
+  stages? Phase 1 findings decide this.
+Done when: an agent, given only a video path and the CLI, can run from subtitles to a
+built project with no human paste step.
+
+### Phase 4: borrow from cli-anything-shotcut
+
+In this order:
+1. Volume envelopes and ducking (music under voice). Check: render and measure dB at
+   voice and no-voice points; also survive Ctrl+S.
+2. Blend modes, opacity, PIP. Check: render a frame and measure.
+3. `--json` on every subcommand. Check: parses with `json.loads`.
+4. A `SKILL.md` describing the CLI for other agents.
+5. Preview bundles. Only if steps 1-4 went smoothly.
+Skip: undo/redo.
+
+### Phase 5: borrow from NarratoAI (all optional, default off)
+
+Order by value per credit: keyframe batching (done in Phase 2), subtitle mask,
+Sonilo BGM/SFX, Tavily plot search, TwelveLabs, hosted captioners. Each is a config
+flag plus a separate module; none may become a hard dependency.
+
+### Phase 6: the milestone chain already in the old handoff
+
+Music dipping (now Phase 4 step 1) -> J/L cuts -> per-line captions -> the planner
+(bundle plus JSON-schema validation) -> an end-to-end run on a short clip ->
+`REPORT.md`.
+
+## Suggested order against a limited budget
+
+| Step | Cost | Stop here and the repo is... |
+|---|---|---|
+| Phase 0 | small | consistent and green |
+| Phase 1 | small, no code | informed; every later step is cheaper |
+| Phase 2 | small-medium | better at perception than before |
+| Phase 4 steps 1-3 | medium | able to duck music and overlay |
+| Phase 3 | medium-large | agent-driven end to end |
+| Phase 5 | optional | extended |
+
+## Open questions for the owner
+
+1. Licence of Cutwright itself? (Decides what can be copied in.)
+2. Does an agent calling a CLI with `--json` satisfy "fully integrate", or is an MCP
+   server required now?
+3. Is `altzotify-cell/cutwright` (and RecapStudio) public? If private, the consultant can only see pasted text.
+4. Which execution agent will run each phase? (Whichever has desktop access is the
+   only one that can run melt and Shotcut for the GUI checks.)
+
+## Session log (what the consultant actually did on 2026-10-26)
+
+- Listed the zip. Read `HANDOFF.md` and the first 120 lines of `README.md`.
+- Did **not** read: `LOG.md`, `REPORT.md`, `PROVENANCE.md`, any `.py` file, the
+  RecapStudio vendor files, or any GitHub repo.
+- Wrote this plan. No code, `.mlt` file or project was changed.
+- Added the communication and consultant protocols, and `COMMS.md`. A test fetch of the
+  RecapStudio URL failed and a search did not find the repo; fetching from GitHub is
+  unverified.
+- Removed `dylanler/AI-auto-narrator` at the owner's request: it was listed with no
+  stated purpose and is not needed.
+
+## Start here (for whichever agent picks this up)
+
+1. Read this section (including the two protocol sections), then "The edit to make" below.
+   Open `COMMS.md` and answer C-001.
+2. Run `python -m cutwright doctor` and confirm what is present.
+3. Do Phase 0. Commit with `git commit -F`.
+4. Do Phase 1 and write `BORROW.md` before touching anything else.
+5. After every breakthrough: LOG.md entry, update Current status, commit, push.
+
+---
+
+## Previous handoff (2026-10-24, unchanged)
+
+
 State of the crossfade work at the pause on 2026-10-24, what is proven, what is
 left, and how to pick it up. `LOG.md` is the running log, `REPORT.md` describes
 the finished projects, `README.md` is the reference; this file is the one to
